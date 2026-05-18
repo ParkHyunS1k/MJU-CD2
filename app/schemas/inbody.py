@@ -25,11 +25,27 @@ class DiseaseRisk(BaseModel):
     top_factors: list[ShapFactor]
 
 
+class FeatureTrend(BaseModel):
+    feature_kor: str
+    dates: list[str]
+    values: list[float]
+    direction: Literal["up", "down", "stable"]
+    total_change: float
+    is_shap_important: bool
+
+
+class TrendAnalysis(BaseModel):
+    record_count: int
+    span_days: int
+    feature_trends: list[FeatureTrend]
+
+
 class HealthReport(BaseModel):
     disease_risks: list[DiseaseRisk]
     lifestyle_tips: list[str]
     supplement_tips: list[str]
     cautions: str | None
+    trend_analysis: TrendAnalysis | None = None
 
 
 class InBodyCreate(BaseModel):

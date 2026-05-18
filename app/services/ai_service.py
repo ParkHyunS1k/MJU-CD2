@@ -20,6 +20,8 @@ _REPORT_SYSTEM_INSTRUCTION = (
     "당신은 공인 운동 전문가이자 영양 코치입니다. "
     "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인을 바탕으로 "
     "생활 패턴 개선 방향과 영양제를 한국어로 추천하세요. "
+    "trend_analysis가 제공된 경우 수치 변화 추세를 반영해 더 구체적인 조언을 하세요. "
+    "특히 SHAP 주요 요인(is_shap_important=true)이 악화 방향으로 변하고 있다면 강조하세요. "
     "의학적 진단은 하지 말고, 우려가 있으면 cautions 필드에 전문의 상담을 권유하세요. "
     "반드시 지정된 JSON 스키마로만 응답하세요."
 )
@@ -31,16 +33,24 @@ class _GeminiReportSchema(BaseModel):
     cautions: str | None
 
 
-def generate_report(disease_risks: list[dict], user_profile: dict) -> dict:
-    """ML 예측 결과(disease_risks)와 유저 프로필을 받아 생활습관·영양제 추천을 생성한다."""
+def generate_report(
+    disease_risks: list[dict],
+    user_profile: dict,
+    trend_analysis: dict | None = None,
+) -> dict:
+    """ML 예측 결과와 유저 프로필을 받아 생활습관·영양제 추천을 생성한다.
+    trend_analysis가 있으면 시계열 추세도 반영한다.
+    """
     client = get_gemini()
 
     payload = {
         "user_profile": {k: user_profile.get(k) for k in ("gender", "birth_year", "fitness_goal")},
         "disease_risks": disease_risks,
+        "trend_analysis": trend_analysis,
     }
     prompt = (
-        "다음 성인병 위험도 분석 결과를 바탕으로 생활 패턴 개선 방향과 영양제를 추천하세요.\n"
+        "다음 성인병 위험도 분석 결과를 바탕으로 생활 패턴 개선 방향과 영양제를 추천하세요. "
+        "trend_analysis가 null이 아니면 수치 변화 추세도 함께 반영하세요.\n"
         f"{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
 
