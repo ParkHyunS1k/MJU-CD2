@@ -3,9 +3,10 @@ from functools import lru_cache
 
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 
 from app.core.config import get_settings
-from app.schemas.inbody import AIReport, InBodyExtraction
+from app.schemas.inbody import InBodyExtraction
 
 MODEL = "gemini-2.5-flash"
 
@@ -15,29 +16,31 @@ def get_gemini() -> genai.Client:
     return genai.Client(api_key=get_settings().GEMINI_API_KEY)
 
 
-SYSTEM_INSTRUCTION = (
+_REPORT_SYSTEM_INSTRUCTION = (
     "당신은 공인 운동 전문가이자 영양 코치입니다. "
-    "사용자의 인바디 데이터를 분석해 객관적인 평가와 실천 가능한 조언을 한국어로 제공합니다. "
+    "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인을 바탕으로 "
+    "생활 패턴 개선 방향과 영양제를 한국어로 추천하세요. "
     "의학적 진단은 하지 말고, 우려가 있으면 cautions 필드에 전문의 상담을 권유하세요. "
     "반드시 지정된 JSON 스키마로만 응답하세요."
 )
 
 
-def analyze_inbody(
-    current: dict,
-    previous: dict | None,
-    user_profile: dict,
-) -> dict:
-    """현재 + 직전 인바디 측정과 사용자 프로필을 받아 구조화된 분석을 생성한다."""
+class _GeminiReportSchema(BaseModel):
+    lifestyle_tips: list[str]
+    supplement_tips: list[str]
+    cautions: str | None
+
+
+def generate_report(disease_risks: list[dict], user_profile: dict) -> dict:
+    """ML 예측 결과(disease_risks)와 유저 프로필을 받아 생활습관·영양제 추천을 생성한다."""
     client = get_gemini()
 
     payload = {
-        "user_profile": user_profile,
-        "current_measurement": current,
-        "previous_measurement": previous,
+        "user_profile": {k: user_profile.get(k) for k in ("gender", "birth_year", "fitness_goal")},
+        "disease_risks": disease_risks,
     }
     prompt = (
-        "다음 데이터를 분석하세요. previous_measurement 가 null 이면 첫 측정입니다.\n"
+        "다음 성인병 위험도 분석 결과를 바탕으로 생활 패턴 개선 방향과 영양제를 추천하세요.\n"
         f"{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
 
@@ -45,10 +48,10 @@ def analyze_inbody(
         model=MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
+            system_instruction=_REPORT_SYSTEM_INSTRUCTION,
             response_mime_type="application/json",
-            response_schema=AIReport,
-            max_output_tokens=2048,
+            response_schema=_GeminiReportSchema,
+            max_output_tokens=1024,
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )

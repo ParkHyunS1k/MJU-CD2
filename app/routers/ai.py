@@ -4,19 +4,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.supabase import get_supabase_admin
 from app.deps.auth import CurrentUser, get_current_user
-from app.schemas.inbody import AIReport
-from app.services.ai_service import analyze_inbody
+from app.schemas.inbody import HealthReport
+from app.services.ai_service import generate_report
+from app.services.prediction_service import predict_all
 from app.services.storage_service import delete_inbody_file
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 log = logging.getLogger(__name__)
 
 
-@router.post("/inbody/analyze", response_model=AIReport)
+@router.post("/inbody/analyze", response_model=HealthReport)
 def analyze_my_inbody(current_user: CurrentUser = Depends(get_current_user)):
-    """가장 최근 인바디 측정에 대한 AI 분석을 생성해 해당 row의 ai_report 컬럼에 저장한다.
-    직전 측정이 있으면 함께 전달해 변화 추이를 분석한다.
-    분석 완료 후 image_url 이 있으면 Storage의 파일을 삭제하고 컬럼은 null 로 비운다.
+    """최신 인바디 측정을 ML 모델로 분석해 4개 성인병 위험도와 생활습관 추천을 반환한다.
+    결과는 해당 row의 ai_report 컬럼에 저장되고, 원본 이미지는 삭제된다.
+    성별 정보가 없으면 400을 반환한다.
     """
     sb = get_supabase_admin()
 
@@ -27,23 +28,46 @@ def analyze_my_inbody(current_user: CurrentUser = Depends(get_current_user)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     user = user_res.data[0]
 
-    logs_res = (
+    if not user.get("gender"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "성별 정보를 먼저 입력해주세요. PATCH /users/me 로 gender를 설정하세요.",
+        )
+
+    log_res = (
         sb.table("inbody_logs")
         .select("*")
         .eq("user_id", current_user.id)
         .order("measured_at", desc=True)
-        .limit(2)
+        .limit(1)
         .execute()
     )
-    if not logs_res.data:
+    if not log_res.data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No InBody records yet")
 
-    latest = logs_res.data[0]
-    previous = logs_res.data[1] if len(logs_res.data) > 1 else None
+    latest = log_res.data[0]
 
-    report = analyze_inbody(current=latest, previous=previous, user_profile=user)
+    try:
+        disease_risks = predict_all(inbody=latest, user_profile=user)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
-    update_payload: dict = {"ai_report": report}
+    if not disease_risks:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "인바디 수치가 부족해 위험도를 계산할 수 없습니다. 수치를 보완 후 다시 시도하세요.",
+        )
+
+    gemini_result = generate_report(disease_risks=disease_risks, user_profile=user)
+
+    report = HealthReport(
+        disease_risks=disease_risks,
+        lifestyle_tips=gemini_result["lifestyle_tips"],
+        supplement_tips=gemini_result["supplement_tips"],
+        cautions=gemini_result.get("cautions"),
+    )
+
+    update_payload: dict = {"ai_report": report.model_dump()}
     image_path = latest.get("image_url")
     if image_path:
         try:

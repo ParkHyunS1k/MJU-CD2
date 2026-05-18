@@ -1,17 +1,35 @@
 from datetime import datetime
+from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-class AIReport(BaseModel):
-    summary: str = Field(..., description="현재 측정의 한 문단 요약")
-    comparison: str = Field(
-        ...,
-        description="직전 측정 대비 변화. 직전 데이터가 없으면 '첫 측정이라 비교 데이터 없음' 으로 명시.",
-    )
-    exercise_guide: list[str] = Field(..., description="다음 2주 운동 가이드 항목들")
-    diet_guide: list[str] = Field(..., description="다음 2주 식단 가이드 항목들")
-    cautions: str | None = Field(None, description="건강상 주의사항 (없으면 null)")
+class RiskLevel(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class ShapFactor(BaseModel):
+    feature_kor: str
+    value: float
+    shap_value: float
+    direction: Literal["up", "down"]
+
+
+class DiseaseRisk(BaseModel):
+    disease: str
+    probability: float
+    risk_level: RiskLevel
+    top_factors: list[ShapFactor]
+
+
+class HealthReport(BaseModel):
+    disease_risks: list[DiseaseRisk]
+    lifestyle_tips: list[str]
+    supplement_tips: list[str]
+    cautions: str | None
 
 
 class InBodyCreate(BaseModel):
@@ -48,7 +66,7 @@ class InBodyUpdate(BaseModel):
 class InBodyResponse(InBodyCreate):
     id: str
     user_id: str
-    ai_report: AIReport | None = None
+    ai_report: HealthReport | None = None
 
 
 class InBodyExtraction(BaseModel):
