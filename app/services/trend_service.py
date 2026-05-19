@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 # 인바디 DB 컬럼 → 한국어 레이블 매핑 (모델 feature와 동일한 항목만)
 _FEATURE_MAP = {
@@ -20,18 +20,23 @@ def _parse_dt(s: str) -> datetime:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
+def _records_with_measured_at(records: list[dict]) -> list[dict]:
+    return [r for r in records if r.get("measured_at")]
+
+
 def is_eligible(records: list[dict]) -> bool:
     """시계열 분석 제공 조건: 기록 3개 이상 + 첫·마지막 측정 간격 90일 이상."""
-    if len(records) < _MIN_RECORDS:
+    dated_records = _records_with_measured_at(records)
+    if len(dated_records) < _MIN_RECORDS:
         return False
-    sorted_r = sorted(records, key=lambda r: r["measured_at"])
+    sorted_r = sorted(dated_records, key=lambda r: r["measured_at"])
     span = (_parse_dt(sorted_r[-1]["measured_at"]) - _parse_dt(sorted_r[0]["measured_at"])).days
     return span >= _MIN_SPAN_DAYS
 
 
 def compute_trends(records: list[dict], shap_feature_kors: set[str]) -> dict:
     """시계열 추세를 계산해 TrendAnalysis 딕셔너리로 반환한다."""
-    sorted_r = sorted(records, key=lambda r: r["measured_at"])
+    sorted_r = sorted(_records_with_measured_at(records), key=lambda r: r["measured_at"])
     span_days = (_parse_dt(sorted_r[-1]["measured_at"]) - _parse_dt(sorted_r[0]["measured_at"])).days
 
     feature_trends = []

@@ -3,7 +3,7 @@ from functools import lru_cache
 
 from google import genai
 from google.genai import types
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
 from app.schemas.inbody import InBodyExtraction
@@ -31,6 +31,15 @@ class _GeminiReportSchema(BaseModel):
     lifestyle_tips: list[str]
     supplement_tips: list[str]
     cautions: str | None
+
+
+def _parse_json_response(text: str | None, schema: type[BaseModel]) -> dict:
+    if not text:
+        raise ValueError("Empty AI response")
+    try:
+        return schema.model_validate_json(text).model_dump(mode="json")
+    except ValidationError as e:
+        raise ValueError(f"Invalid AI response schema: {e}") from e
 
 
 def generate_report(
@@ -65,7 +74,7 @@ def generate_report(
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
-    return json.loads(res.text)
+    return _parse_json_response(res.text, _GeminiReportSchema)
 
 
 EXTRACT_SYSTEM_INSTRUCTION = (
@@ -95,4 +104,4 @@ def extract_inbody_from_image(file_bytes: bytes, mime_type: str) -> dict:
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
-    return json.loads(res.text)
+    return _parse_json_response(res.text, InBodyExtraction)

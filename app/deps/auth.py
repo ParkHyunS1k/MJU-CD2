@@ -36,6 +36,7 @@ def get_current_user(
             signing_key.key,
             algorithms=["ES256", "RS256"],
             audience="authenticated",
+            issuer=settings.supabase_jwt_issuer,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token expired")
