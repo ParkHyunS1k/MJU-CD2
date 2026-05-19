@@ -21,7 +21,7 @@ _REPORT_SYSTEM_INSTRUCTION = (
     "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인을 바탕으로 "
     "생활 패턴 개선 방향과 영양제를 한국어로 추천하세요. "
     "trend_analysis가 제공된 경우 수치 변화 추세를 반영해 더 구체적인 조언을 하세요. "
-    "특히 SHAP 주요 요인(is_shap_important=true)이 악화 방향으로 변하고 있다면 강조하세요. "
+    "특히 SHAP 주요 요인이 악화 방향으로 변해 is_risk_worsening=true인 항목을 강조하세요. "
     "의학적 진단은 하지 말고, 우려가 있으면 cautions 필드에 전문의 상담을 권유하세요. "
     "반드시 지정된 JSON 스키마로만 응답하세요."
 )

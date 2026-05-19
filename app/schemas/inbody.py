@@ -31,7 +31,10 @@ class FeatureTrend(BaseModel):
     values: list[float]
     direction: Literal["up", "down", "stable"]
     total_change: float
+    slope_per_90_days: float | None = None
     is_shap_important: bool
+    shap_directions: list[Literal["up", "down"]] = Field(default_factory=list)
+    is_risk_worsening: bool = False
 
 
 class TrendAnalysis(BaseModel):

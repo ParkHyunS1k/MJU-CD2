@@ -87,12 +87,14 @@ def _build_trend_analysis(records: list[dict], disease_risks: list[dict]) -> dic
     if not is_eligible(records):
         return None
 
-    shap_kors = {
-        f["feature_kor"]
-        for risk in disease_risks
-        for f in risk["top_factors"]
-    }
-    return compute_trends(records, shap_kors)
+    shap_feature_directions: dict[str, set[str]] = {}
+    for risk in disease_risks:
+        for factor in risk["top_factors"]:
+            shap_feature_directions.setdefault(factor["feature_kor"], set()).add(
+                factor["direction"]
+            )
+
+    return compute_trends(records, shap_feature_directions)
 
 
 def _save_report_and_cleanup_image(sb, latest: dict, report: HealthReport) -> None:
