@@ -9,11 +9,7 @@ import type {
   UserUpdate,
 } from '../types/models';
 
-const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-
-if (!baseUrl) {
-  throw new Error('Missing EXPO_PUBLIC_API_BASE_URL. Set it in mobile/.env');
-}
+const baseUrl = 'https://care-production-abf2.up.railway.app';
 
 async function authHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();

@@ -1,15 +1,6 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Button, Text, TextInput, Surface } from 'react-native-paper';
 
 import { useAuth } from '../contexts/AuthContext';
 
@@ -19,6 +10,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSubmit = async () => {
     if (!email || !password) {
@@ -46,76 +38,101 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Text style={styles.title}>Healthcare</Text>
-      <Text style={styles.subtitle}>
-        {mode === 'signin' ? '로그인' : '회원가입'}
-      </Text>
+      <View style={styles.header}>
+        <Text variant="displaySmall" style={styles.title}>Healthcare</Text>
+        <Text variant="bodyLarge" style={styles.subtitle}>
+          {mode === 'signin' ? '계정에 로그인하세요' : '새 계정을 만드세요'}
+        </Text>
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="이메일"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        editable={!busy}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="비밀번호"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        editable={!busy}
-      />
+      <Surface style={styles.card} elevation={2}>
+        <TextInput
+          label="이메일"
+          mode="outlined"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+          disabled={busy}
+          left={<TextInput.Icon icon="email-outline" />}
+          style={styles.input}
+        />
+        <TextInput
+          label="비밀번호"
+          mode="outlined"
+          secureTextEntry={!showPassword}
+          value={password}
+          onChangeText={setPassword}
+          disabled={busy}
+          left={<TextInput.Icon icon="lock-outline" />}
+          right={
+            <TextInput.Icon
+              icon={showPassword ? 'eye-off' : 'eye'}
+              onPress={() => setShowPassword(v => !v)}
+            />
+          }
+          style={styles.input}
+        />
 
-      <TouchableOpacity
-        style={[styles.button, busy && styles.buttonDisabled]}
-        onPress={onSubmit}
-        disabled={busy}
-      >
-        {busy ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>
-            {mode === 'signin' ? '로그인' : '가입하기'}
-          </Text>
-        )}
-      </TouchableOpacity>
+        <Button
+          mode="contained"
+          onPress={onSubmit}
+          loading={busy}
+          disabled={busy}
+          style={styles.button}
+          contentStyle={styles.buttonContent}
+        >
+          {mode === 'signin' ? '로그인' : '가입하기'}
+        </Button>
 
-      <TouchableOpacity
-        onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-      >
-        <Text style={styles.toggleText}>
+        <Button
+          mode="text"
+          onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+          disabled={busy}
+          style={styles.toggleButton}
+        >
           {mode === 'signin'
             ? '계정이 없으신가요? 회원가입'
             : '이미 계정이 있으신가요? 로그인'}
-        </Text>
-      </TouchableOpacity>
+        </Button>
+      </Surface>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, justifyContent: 'center', backgroundColor: '#fff' },
-  title: { fontSize: 32, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
-  subtitle: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 32 },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#f5f5f5',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  title: {
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  subtitle: {
+    color: '#666',
+  },
+  card: {
+    borderRadius: 16,
+    padding: 24,
+  },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 14,
     marginBottom: 12,
-    fontSize: 16,
   },
   button: {
-    backgroundColor: '#1f6feb',
-    paddingVertical: 14,
+    marginTop: 8,
     borderRadius: 8,
-    alignItems: 'center',
+  },
+  buttonContent: {
+    paddingVertical: 6,
+  },
+  toggleButton: {
     marginTop: 8,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  toggleText: { textAlign: 'center', color: '#1f6feb', marginTop: 16 },
 });

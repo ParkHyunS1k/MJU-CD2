@@ -1,6 +1,7 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PaperProvider } from 'react-native-paper';
 
 import { AuthProvider } from './src/contexts/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -8,10 +9,12 @@ import RootNavigator from './src/navigation/RootNavigator';
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <RootNavigator />
-        <StatusBar style="auto" />
-      </AuthProvider>
+      <PaperProvider>
+        <AuthProvider>
+          <RootNavigator />
+          <StatusBar style="auto" />
+        </AuthProvider>
+      </PaperProvider>
     </SafeAreaProvider>
   );
 }

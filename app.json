@@ -11,8 +11,10 @@
       "bundleIdentifier": "com.example.healthcare"
     },
     "android": {
-      "package": "com.example.healthcare"
+      "package": "com.example.healthcare",
+      "jsEngine": "hermes"
     },
+    "jsEngine": "hermes",
     "extra": {
       "router": {
         "origin": false
