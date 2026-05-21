@@ -9,7 +9,7 @@ import type {
   UserUpdate,
 } from '../types/models';
 
-const baseUrl = 'https://care-production-abf2.up.railway.app';
+const baseUrl = 'http://10.0.2.2:8000';
 
 async function authHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
