@@ -28,11 +28,21 @@ DISEASES = ["hypertension", "cholesterol", "diabetes", "triglyceride"]
 _GENDER_SPLIT = {"hypertension", "diabetes", "triglyceride"}
 
 
+def _patch_sklearn_compat(model) -> None:
+    """구버전 sklearn으로 학습된 모델의 호환성 패치."""
+    from sklearn.linear_model import LogisticRegression
+    clf = model.named_steps.get("clf", model) if hasattr(model, "named_steps") else model
+    if isinstance(clf, LogisticRegression) and not hasattr(clf, "multi_class"):
+        clf.multi_class = "auto"
+
+
 @lru_cache(maxsize=None)
 def _load_bundle(path: str) -> dict:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return joblib.load(path)
+        bundle = joblib.load(path)
+    _patch_sklearn_compat(bundle.get("model"))
+    return bundle
 
 
 def _bundle_path(disease: str, sex: str) -> Path:
