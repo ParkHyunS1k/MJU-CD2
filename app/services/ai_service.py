@@ -1,4 +1,5 @@
 import json
+import re
 from functools import lru_cache
 
 from google import genai
@@ -20,10 +21,16 @@ _REPORT_SYSTEM_INSTRUCTION = (
     "당신은 공인 운동 전문가이자 영양 코치입니다. "
     "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인을 바탕으로 "
     "생활 패턴 개선 방향과 영양제를 한국어로 추천하세요. "
+    "필요하면 구글 검색을 통해 최신 영양제 정보나 연구 결과를 찾아 반영하세요. "
     "trend_analysis가 제공된 경우 수치 변화 추세를 반영해 더 구체적인 조언을 하세요. "
     "특히 SHAP 주요 요인이 악화 방향으로 변해 is_risk_worsening=true인 항목을 강조하세요. "
     "의학적 진단은 하지 말고, 우려가 있으면 cautions 필드에 전문의 상담을 권유하세요. "
-    "반드시 지정된 JSON 스키마로만 응답하세요."
+    "반드시 아래 JSON 형식으로만 응답하세요:\n"
+    '{"lifestyle_tips": ["..."], "supplement_tips": ["..."], "cautions": "..." or null}'
+)
+
+_REPORT_SCHEMA_HINT = (
+    '{"lifestyle_tips": ["string"], "supplement_tips": ["string"], "cautions": "string or null}'
 )
 
 
@@ -31,6 +38,16 @@ class _GeminiReportSchema(BaseModel):
     lifestyle_tips: list[str]
     supplement_tips: list[str]
     cautions: str | None
+
+
+def _extract_json(text: str | None) -> str | None:
+    if not text:
+        return None
+    # ```json ... ``` 또는 ``` ... ``` 블록에서 추출
+    match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
+    if match:
+        return match.group(1)
+    return text
 
 
 def _parse_json_response(text: str | None, schema: type[BaseModel]) -> dict:
@@ -60,7 +77,8 @@ def generate_report(
     prompt = (
         "다음 성인병 위험도 분석 결과를 바탕으로 생활 패턴 개선 방향과 영양제를 추천하세요. "
         "trend_analysis가 null이 아니면 수치 변화 추세도 함께 반영하세요.\n"
-        f"{json.dumps(payload, ensure_ascii=False, default=str)}"
+        f"{json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+        f"반드시 다음 JSON 형식으로만 응답하세요: {_REPORT_SCHEMA_HINT}"
     )
 
     res = client.models.generate_content(
@@ -68,13 +86,11 @@ def generate_report(
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=_REPORT_SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=_GeminiReportSchema,
-            max_output_tokens=1024,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            max_output_tokens=2048,
         ),
     )
-    return _parse_json_response(res.text, _GeminiReportSchema)
+    return _parse_json_response(_extract_json(res.text), _GeminiReportSchema)
 
 
 EXTRACT_SYSTEM_INSTRUCTION = (
