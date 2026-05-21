@@ -12,7 +12,8 @@ import InBodyCreateScreen from '../screens/InBodyCreateScreen';
 import InBodyDetailScreen from '../screens/InBodyDetailScreen';
 import InBodyUploadScreen from '../screens/InBodyUploadScreen';
 import InBodyReviewScreen from '../screens/InBodyReviewScreen';
-import AnalysisScreen from '../screens/AnalysisScreen';
+import RiskScreen from '../screens/RiskScreen';
+import ReportScreen from '../screens/ReportScreen';
 import type { InBodyStackParamList } from './types';
 
 const Tab = createBottomTabNavigator();
@@ -46,6 +47,16 @@ function InBodyStackNavigator() {
         component={InBodyReviewScreen}
         options={{ title: '추출 결과 확인' }}
       />
+      <InBodyStack.Screen
+        name="RiskScreen"
+        component={RiskScreen}
+        options={{ title: '위험도 분석' }}
+      />
+      <InBodyStack.Screen
+        name="ReportScreen"
+        component={ReportScreen}
+        options={{ title: 'AI 건강 리포트' }}
+      />
     </InBodyStack.Navigator>
   );
 }
@@ -58,11 +69,6 @@ function MainTabs() {
         name="InBody"
         component={InBodyStackNavigator}
         options={{ title: 'InBody', headerShown: false }}
-      />
-      <Tab.Screen
-        name="Analysis"
-        component={AnalysisScreen}
-        options={{ title: 'AI 분석' }}
       />
     </Tab.Navigator>
   );

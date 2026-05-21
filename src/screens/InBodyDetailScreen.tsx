@@ -17,8 +17,10 @@ import {
 
 import { api } from '../lib/api';
 import type { InBodyStackParamList } from '../navigation/types';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { InBodyRecord } from '../types/models';
 
+type Nav = NativeStackNavigationProp<InBodyStackParamList, 'InBodyDetail'>;
 type R = RouteProp<InBodyStackParamList, 'InBodyDetail'>;
 
 const FIELD_LABELS: { key: keyof InBodyRecord; label: string; unit?: string }[] = [
@@ -37,7 +39,7 @@ const FIELD_LABELS: { key: keyof InBodyRecord; label: string; unit?: string }[] 
 
 export default function InBodyDetailScreen() {
   const route = useRoute<R>();
-  const nav = useNavigation();
+  const nav = useNavigation<Nav>();
   const { id } = route.params;
   const [record, setRecord] = useState<InBodyRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,32 +116,12 @@ export default function InBodyDetailScreen() {
       })}
 
       {record.ai_report ? (
-        <View style={styles.reportBox}>
-          <Text style={styles.reportHeader}>AI 분석 리포트</Text>
-
-          <Text style={styles.reportSection}>요약</Text>
-          <Text style={styles.reportBody}>{record.ai_report.summary}</Text>
-
-          <Text style={styles.reportSection}>이전 측정 대비 변화</Text>
-          <Text style={styles.reportBody}>{record.ai_report.comparison}</Text>
-
-          <Text style={styles.reportSection}>운동 가이드</Text>
-          {record.ai_report.exercise_guide.map((it, i) => (
-            <Text key={`e${i}`} style={styles.reportBullet}>• {it}</Text>
-          ))}
-
-          <Text style={styles.reportSection}>식단 가이드</Text>
-          {record.ai_report.diet_guide.map((it, i) => (
-            <Text key={`d${i}`} style={styles.reportBullet}>• {it}</Text>
-          ))}
-
-          {record.ai_report.cautions ? (
-            <>
-              <Text style={styles.reportSection}>주의사항</Text>
-              <Text style={styles.reportBody}>{record.ai_report.cautions}</Text>
-            </>
-          ) : null}
-        </View>
+        <TouchableOpacity
+          style={styles.reportButton}
+          onPress={() => nav.navigate('ReportScreen', { id })}
+        >
+          <Text style={styles.reportButtonText}>AI 리포트 보기</Text>
+        </TouchableOpacity>
       ) : null}
 
       <TouchableOpacity
@@ -168,6 +150,14 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 15, color: '#444' },
   rowValue: { fontSize: 15, fontWeight: '600' },
+  reportButton: {
+    marginTop: 16,
+    backgroundColor: '#4f6ef7',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  reportButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   deleteButton: {
     marginTop: 24,
     padding: 14,
@@ -177,27 +167,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deleteText: { color: '#d73a49', fontWeight: '600' },
-  reportBox: {
-    marginTop: 24,
-    padding: 14,
-    backgroundColor: '#f0f6ff',
-    borderWidth: 1,
-    borderColor: '#c8dcfa',
-    borderRadius: 12,
-    gap: 4,
-  },
-  reportHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1f6feb',
-    marginBottom: 8,
-  },
-  reportSection: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#24292e',
-    marginTop: 10,
-  },
-  reportBody: { fontSize: 14, lineHeight: 21, color: '#24292e' },
-  reportBullet: { fontSize: 14, lineHeight: 21, color: '#24292e', marginTop: 2 },
 });

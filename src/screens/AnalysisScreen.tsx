@@ -65,10 +65,8 @@ export default function AnalysisScreen() {
 function ReportView({ report }: { report: AIReport }) {
   return (
     <View style={{ gap: 12 }}>
-      <Section title="요약" body={report.summary} />
-      <Section title="이전 측정 대비 변화" body={report.comparison} />
-      <ListSection title="운동 가이드" items={report.exercise_guide} />
-      <ListSection title="식단 가이드" items={report.diet_guide} />
+      <ListSection title="생활습관 추천" items={report.lifestyle_tips} />
+      <ListSection title="영양제 추천" items={report.supplement_tips} />
       {report.cautions ? (
         <Section title="주의사항" body={report.cautions} variant="warn" />
       ) : null}

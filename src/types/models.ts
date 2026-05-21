@@ -16,11 +16,19 @@ export interface UserUpdate {
   fitness_goal?: string | null;
 }
 
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface DiseaseRisk {
+  disease: string;
+  probability: number;
+  risk_level: RiskLevel;
+  top_factors: { feature_kor: string; value: number; shap_value: number; direction: 'up' | 'down' }[];
+}
+
 export interface AIReport {
-  summary: string;
-  comparison: string;
-  exercise_guide: string[];
-  diet_guide: string[];
+  disease_risks: DiseaseRisk[];
+  lifestyle_tips: string[];
+  supplement_tips: string[];
   cautions: string | null;
 }
 
@@ -60,6 +68,7 @@ export interface InBodyCreateInput {
 }
 
 export type AnalysisResponse = AIReport;
+
 
 export type InBodyUpdateInput = Partial<Omit<InBodyCreateInput, 'image_url'>>;
 
