@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 from app.core.config import get_settings
 from app.schemas.inbody import InBodyExtraction
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-3.5-flash"
 
 
 @lru_cache
@@ -19,14 +19,14 @@ def get_gemini() -> genai.Client:
 
 _REPORT_SYSTEM_INSTRUCTION = (
     "당신은 공인 운동 전문가이자 영양 코치입니다. "
-    "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인을 바탕으로 "
-    "생활 패턴 개선 방향과 영양제를 한국어로 추천하세요. "
-    "필요하면 구글 검색을 통해 최신 영양제 정보나 연구 결과를 찾아 반영하세요. "
+    "사용자의 실제 인바디 수치(inbody_metrics)를 최우선으로 참고하여 "
+    "현재 몸 상태의 부족하거나 과잉된 항목을 파악하고, 그에 맞는 영양제를 한국어로 추천하세요. "
+    "예를 들어 단백질 수치가 낮으면 단백질 보충제, 무기질이 낮으면 미네랄 복합제, "
+    "체지방률이 높으면 지방 분해 보조 성분, 골격근량이 부족하면 크레아틴·BCAA 등을 고려하세요. "
+    "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인도 함께 반영하세요. "
     "trend_analysis가 제공된 경우 수치 변화 추세를 반영해 더 구체적인 조언을 하세요. "
     "특히 SHAP 주요 요인이 악화 방향으로 변해 is_risk_worsening=true인 항목을 강조하세요. "
-    "의학적 진단은 하지 말고, 우려가 있으면 cautions 필드에 전문의 상담을 권유하세요. "
-    "반드시 아래 JSON 형식으로만 응답하세요:\n"
-    '{"lifestyle_tips": ["..."], "supplement_tips": ["..."], "cautions": "..." or null}'
+    "의학적 진단은 하지 말고, 우려가 있으면 cautions 필드에 전문의 상담을 권유하세요."
 )
 
 _REPORT_SCHEMA_HINT = (
@@ -59,23 +59,34 @@ def _parse_json_response(text: str | None, schema: type[BaseModel]) -> dict:
         raise ValueError(f"Invalid AI response schema: {e}") from e
 
 
+_INBODY_METRIC_KEYS = (
+    "weight", "skeletal_muscle_mass", "body_fat_mass", "body_fat_percentage",
+    "body_water", "protein", "minerals", "bmi", "basal_metabolic_rate",
+    "abs_fat", "fat_level",
+)
+
+
 def generate_report(
     disease_risks: list[dict],
     user_profile: dict,
     trend_analysis: dict | None = None,
+    inbody_metrics: dict | None = None,
 ) -> dict:
     """ML 예측 결과와 유저 프로필을 받아 생활습관·영양제 추천을 생성한다.
     trend_analysis가 있으면 시계열 추세도 반영한다.
+    inbody_metrics가 있으면 실제 수치 기반으로 영양제를 추천한다.
     """
     client = get_gemini()
 
     payload = {
         "user_profile": {k: user_profile.get(k) for k in ("gender", "birth_year", "fitness_goal")},
+        "inbody_metrics": {k: inbody_metrics.get(k) for k in _INBODY_METRIC_KEYS} if inbody_metrics else None,
         "disease_risks": disease_risks,
         "trend_analysis": trend_analysis,
     }
     prompt = (
-        "다음 성인병 위험도 분석 결과를 바탕으로 생활 패턴 개선 방향과 영양제를 추천하세요. "
+        "다음 인바디 수치와 성인병 위험도 분석 결과를 바탕으로 생활 패턴 개선 방향과 영양제를 추천하세요. "
+        "inbody_metrics의 각 수치를 직접 참고해 부족하거나 과잉된 항목에 맞는 영양제를 우선 추천하세요. "
         "trend_analysis가 null이 아니면 수치 변화 추세도 함께 반영하세요.\n"
         f"{json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
         f"반드시 다음 JSON 형식으로만 응답하세요: {_REPORT_SCHEMA_HINT}"
@@ -86,11 +97,12 @@ def generate_report(
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=_REPORT_SYSTEM_INSTRUCTION,
-            tools=[types.Tool(google_search=types.GoogleSearch())],
-            max_output_tokens=2048,
+            response_mime_type="application/json",
+            response_schema=_GeminiReportSchema,
+            max_output_tokens=8192,
         ),
     )
-    return _parse_json_response(_extract_json(res.text), _GeminiReportSchema)
+    return _parse_json_response(res.text, _GeminiReportSchema)
 
 
 EXTRACT_SYSTEM_INSTRUCTION = (

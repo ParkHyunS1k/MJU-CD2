@@ -49,6 +49,7 @@ def analyze_latest_inbody(user_id: str) -> HealthReport:
             disease_risks=disease_risks,
             user_profile=user,
             trend_analysis=trend_analysis,
+            inbody_metrics=latest,
         )
     except ValueError as e:
         raise AnalysisServiceError(502, str(e)) from e
