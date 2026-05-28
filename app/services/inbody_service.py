@@ -36,7 +36,7 @@ def create_inbody_record(user_id: str, payload: InBodyCreate) -> dict:
     res = sb.table(TABLE).insert(data).execute()
     if not res.data:
         raise InBodyServiceError(500, "Failed to create InBody record")
-    return res.data[0]
+    return _normalize_record(res.data[0])
 
 
 def list_inbody_records(user_id: str, limit: int) -> list[dict]:
@@ -49,7 +49,7 @@ def list_inbody_records(user_id: str, limit: int) -> list[dict]:
         .limit(limit)
         .execute()
     )
-    return res.data
+    return [_normalize_record(record) for record in res.data]
 
 
 def get_inbody_record(user_id: str, inbody_id: str) -> dict:
@@ -64,7 +64,7 @@ def get_inbody_record(user_id: str, inbody_id: str) -> dict:
     )
     if not res.data:
         raise InBodyServiceError(404, "InBody record not found")
-    return res.data[0]
+    return _normalize_record(res.data[0])
 
 
 def update_inbody_record(user_id: str, inbody_id: str, payload: InBodyUpdate) -> dict:
@@ -82,7 +82,7 @@ def update_inbody_record(user_id: str, inbody_id: str, payload: InBodyUpdate) ->
     )
     if not res.data:
         raise InBodyServiceError(404, "InBody record not found")
-    return res.data[0]
+    return _normalize_record(res.data[0])
 
 
 def delete_inbody_record(user_id: str, inbody_id: str) -> None:
@@ -152,10 +152,78 @@ def create_inbody_from_upload(
         raise InBodyServiceError(500, "Failed to create InBody record")
 
     return InBodyUploadResponse(
-        record=res.data[0],
+        record=_normalize_record(res.data[0]),
         extraction_confidence=extraction["confidence"],
         extraction_notes=extraction.get("notes"),
     )
+
+
+def _normalize_record(record: dict) -> dict:
+    normalized = dict(record)
+    normalized["ai_report"] = _normalize_ai_report(normalized.get("ai_report"))
+    return normalized
+
+
+def _normalize_ai_report(report: dict | None) -> dict | None:
+    if not report or "summary" in report:
+        return report
+
+    disease_risks = report.get("disease_risks", [])
+    lifestyle_tips = report.get("lifestyle_tips", [])
+    supplement_tips = report.get("supplement_tips", [])
+    cautions = report.get("cautions")
+
+    return {
+        "summary": {
+            "title": "이전 AI 건강 리포트",
+            "overall_message": "이전 형식으로 저장된 리포트를 새 화면 구조에 맞춰 표시합니다.",
+            "key_focus": lifestyle_tips[:3],
+        },
+        "body_composition_report": {
+            "strengths": [],
+            "watch_points": [],
+        },
+        "risk_report": [
+            {
+                "disease": risk.get("disease", "unknown"),
+                "risk_level": risk.get("risk_level", "low"),
+                "probability": risk.get("probability", 0),
+                "main_factors": [
+                    factor.get("feature_kor", "")
+                    for factor in risk.get("top_factors", [])
+                    if factor.get("feature_kor")
+                ],
+                "message": "이전 리포트의 성인병 위험도 결과입니다.",
+            }
+            for risk in disease_risks
+        ],
+        "lifestyle_plan": [
+            {
+                "category": "habit",
+                "title": "생활습관 추천",
+                "reason": "이전 리포트의 생활습관 추천 항목입니다.",
+                "actions": lifestyle_tips,
+            }
+        ] if lifestyle_tips else [],
+        "supplement_candidates": [
+            {
+                "name": f"보충제 후보 {idx + 1}",
+                "purpose": tip,
+                "related_metrics": [],
+                "evidence_level": "limited",
+                "why_consider": tip,
+                "cautions": [],
+                "not_recommended_if": [],
+            }
+            for idx, tip in enumerate(supplement_tips)
+        ],
+        "cautions": {
+            "medical_disclaimer": cautions or "의학적 진단이 아니며 필요 시 전문가와 상담하세요.",
+            "consult_doctor_if": [],
+        },
+        "disease_risks": disease_risks,
+        "trend_analysis": report.get("trend_analysis"),
+    }
 
 
 def _record_data_from_extraction(

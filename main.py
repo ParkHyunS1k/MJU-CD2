@@ -24,3 +24,7 @@ app.include_router(ai.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="[IP_ADDRESS]", port=8001)

@@ -1,5 +1,5 @@
 import json
-import re
+import logging
 from functools import lru_cache
 
 from google import genai
@@ -7,9 +7,14 @@ from google.genai import types
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
-from app.schemas.inbody import InBodyExtraction
+from app.schemas.inbody import AIReportContent, InBodyExtraction
 
-MODEL = "gemini-3.5-flash"
+MODEL = "gemini-2.5-flash"
+REPORT_MODELS = (MODEL, "gemini-2.5-flash-lite")
+EXTRACT_MODELS = (MODEL, "gemini-2.5-flash-lite")
+_RETRYABLE_GEMINI_STATUS_CODES = {429, 500, 502, 503, 504}
+
+log = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -19,35 +24,16 @@ def get_gemini() -> genai.Client:
 
 _REPORT_SYSTEM_INSTRUCTION = (
     "당신은 공인 운동 전문가이자 영양 코치입니다. "
-    "사용자의 실제 인바디 수치(inbody_metrics)를 최우선으로 참고하여 "
-    "현재 몸 상태의 부족하거나 과잉된 항목을 파악하고, 그에 맞는 영양제를 한국어로 추천하세요. "
-    "예를 들어 단백질 수치가 낮으면 단백질 보충제, 무기질이 낮으면 미네랄 복합제, "
-    "체지방률이 높으면 지방 분해 보조 성분, 골격근량이 부족하면 크레아틴·BCAA 등을 고려하세요. "
-    "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인도 함께 반영하세요. "
+    "인바디 수치와 ML 성인병 위험도 분석을 바탕으로 생활습관 리포트를 작성하고, "
+    "영양제는 치료나 개선 보장이 아닌 보수적인 보충제 후보로만 제안하세요. "
+    "인바디의 protein, minerals, body_water는 체성분 추정값이므로 영양 결핍으로 단정하지 마세요. "
+    "체지방률이 높아도 지방 분해, 치료, 개선 보장 같은 표현은 사용하지 말고 생활습관 개선을 우선하세요. "
+    "ML 모델이 예측한 성인병 위험도와 SHAP 주요 기여 요인을 함께 반영하세요. "
     "trend_analysis가 제공된 경우 수치 변화 추세를 반영해 더 구체적인 조언을 하세요. "
     "특히 SHAP 주요 요인이 악화 방향으로 변해 is_risk_worsening=true인 항목을 강조하세요. "
-    "의학적 진단은 하지 말고, 우려가 있으면 cautions 필드에 전문의 상담을 권유하세요."
+    "의학적 진단은 하지 말고, 약물 복용·임신/수유·신장/간 질환·수술 예정자는 전문가 상담을 권유하세요. "
+    "반드시 지정된 JSON 스키마로만 응답하세요."
 )
-
-_REPORT_SCHEMA_HINT = (
-    '{"lifestyle_tips": ["string"], "supplement_tips": ["string"], "cautions": "string or null}'
-)
-
-
-class _GeminiReportSchema(BaseModel):
-    lifestyle_tips: list[str]
-    supplement_tips: list[str]
-    cautions: str | None
-
-
-def _extract_json(text: str | None) -> str | None:
-    if not text:
-        return None
-    # ```json ... ``` 또는 ``` ... ``` 블록에서 추출
-    match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
-    if match:
-        return match.group(1)
-    return text
 
 
 def _parse_json_response(text: str | None, schema: type[BaseModel]) -> dict:
@@ -57,6 +43,14 @@ def _parse_json_response(text: str | None, schema: type[BaseModel]) -> dict:
         return schema.model_validate_json(text).model_dump(mode="json")
     except ValidationError as e:
         raise ValueError(f"Invalid AI response schema: {e}") from e
+
+
+def _is_retryable_gemini_error(error: Exception) -> bool:
+    status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
+    if status_code in _RETRYABLE_GEMINI_STATUS_CODES:
+        return True
+    message = str(error)
+    return "UNAVAILABLE" in message or "RESOURCE_EXHAUSTED" in message
 
 
 _INBODY_METRIC_KEYS = (
@@ -72,9 +66,9 @@ def generate_report(
     trend_analysis: dict | None = None,
     inbody_metrics: dict | None = None,
 ) -> dict:
-    """ML 예측 결과와 유저 프로필을 받아 생활습관·영양제 추천을 생성한다.
+    """ML 예측 결과와 유저 프로필을 받아 구조화된 생활습관 리포트를 생성한다.
     trend_analysis가 있으면 시계열 추세도 반영한다.
-    inbody_metrics가 있으면 실제 수치 기반으로 영양제를 추천한다.
+    inbody_metrics가 있으면 실제 수치 기반으로 보수적인 보충제 후보를 제안한다.
     """
     client = get_gemini()
 
@@ -85,24 +79,52 @@ def generate_report(
         "trend_analysis": trend_analysis,
     }
     prompt = (
-        "다음 인바디 수치와 성인병 위험도 분석 결과를 바탕으로 생활 패턴 개선 방향과 영양제를 추천하세요. "
-        "inbody_metrics의 각 수치를 직접 참고해 부족하거나 과잉된 항목에 맞는 영양제를 우선 추천하세요. "
-        "trend_analysis가 null이 아니면 수치 변화 추세도 함께 반영하세요.\n"
-        f"{json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
-        f"반드시 다음 JSON 형식으로만 응답하세요: {_REPORT_SCHEMA_HINT}"
+        "다음 데이터를 바탕으로 사용자가 바로 이해할 수 있는 구조화 리포트를 작성하세요.\n"
+        "- summary: title 20자 이내, overall_message 120자 이내, key_focus 2~3개\n"
+        "- body_composition_report: strengths 최대 2개, watch_points 최대 3개. 각 message는 80자 이내. 결핍 진단은 금지\n"
+        "- risk_report: disease_risks를 사용자 친화적으로 재구성. message는 100자 이내, main_factors는 최대 3개\n"
+        "- lifestyle_plan: 3~5개. 각 reason에는 반드시 실제 수치, 위험도, SHAP 요인, 추세 중 하나를 명시하세요. "
+        "입력 데이터로 뒷받침되지 않는 sleep/habit 조언은 만들지 마세요. "
+        "예: '잠을 충분히 자세요'처럼 누구에게나 맞는 일반론은 금지. "
+        "actions는 항목당 2~3개, 각 60자 이내\n"
+        "- supplement_candidates: 2~3개만 제안. why_consider는 100자 이내. cautions와 not_recommended_if는 각각 최대 3개\n"
+        "- cautions: medical_disclaimer는 100자 이내, consult_doctor_if는 최대 4개\n"
+        "개인화 근거가 약하면 해당 섹션을 일반 조언으로 채우지 말고, 인바디/위험도와 직접 연결되는 항목만 작성하세요.\n"
+        "모든 문장은 한국어로 작성하세요.\n"
+        f"{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
 
-    res = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=_REPORT_SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=_GeminiReportSchema,
-            max_output_tokens=8192,
-        ),
+    config = types.GenerateContentConfig(
+        system_instruction=_REPORT_SYSTEM_INSTRUCTION,
+        response_mime_type="application/json",
+        response_schema=AIReportContent,
+        max_output_tokens=16384,
     )
-    return _parse_json_response(res.text, _GeminiReportSchema)
+    last_error: Exception | None = None
+    for model in REPORT_MODELS:
+        try:
+            res = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
+            )
+            return _parse_json_response(res.text, AIReportContent)
+        except Exception as e:
+            last_error = e
+            if isinstance(e, ValueError):
+                if model == REPORT_MODELS[-1]:
+                    raise
+                log.warning("Gemini report model %s returned invalid JSON, retrying fallback: %s", model, e)
+                continue
+            if not _is_retryable_gemini_error(e):
+                raise
+            if model == REPORT_MODELS[-1]:
+                raise ValueError(
+                    "Gemini API가 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요."
+                ) from e
+            log.warning("Gemini report model %s failed, retrying fallback: %s", model, e)
+    else:
+        raise last_error or ValueError("Failed to generate AI response")
 
 
 EXTRACT_SYSTEM_INSTRUCTION = (
@@ -118,18 +140,38 @@ def extract_inbody_from_image(file_bytes: bytes, mime_type: str) -> dict:
     """이미지/PDF에서 인바디 수치를 추출. InBodyExtraction 스키마 dict를 반환."""
     client = get_gemini()
 
-    res = client.models.generate_content(
-        model=MODEL,
-        contents=[
-            types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
-            "이 파일에서 인바디 측정 수치를 추출해 JSON 스키마로 반환하세요.",
-        ],
-        config=types.GenerateContentConfig(
-            system_instruction=EXTRACT_SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=InBodyExtraction,
-            max_output_tokens=2048,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-        ),
+    contents = [
+        types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+        "이 파일에서 인바디 측정 수치를 추출해 JSON 스키마로 반환하세요.",
+    ]
+    config = types.GenerateContentConfig(
+        system_instruction=EXTRACT_SYSTEM_INSTRUCTION,
+        response_mime_type="application/json",
+        response_schema=InBodyExtraction,
+        max_output_tokens=2048,
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
-    return _parse_json_response(res.text, InBodyExtraction)
+    last_error: Exception | None = None
+    for model in EXTRACT_MODELS:
+        try:
+            res = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config,
+            )
+            return _parse_json_response(res.text, InBodyExtraction)
+        except Exception as e:
+            last_error = e
+            if isinstance(e, ValueError):
+                if model == EXTRACT_MODELS[-1]:
+                    raise
+                log.warning("Gemini extract model %s returned invalid JSON, retrying fallback: %s", model, e)
+                continue
+            if not _is_retryable_gemini_error(e):
+                raise
+            if model == EXTRACT_MODELS[-1]:
+                raise ValueError(
+                    "Gemini API 사용량이 초과되었거나 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요."
+                ) from e
+            log.warning("Gemini extract model %s failed, retrying fallback: %s", model, e)
+    raise last_error or ValueError("Failed to extract InBody metrics")

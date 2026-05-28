@@ -30,9 +30,37 @@ def analyze_latest_inbody(user_id: str) -> HealthReport:
     if not records:
         raise AnalysisServiceError(400, "No InBody records yet")
 
-    latest = records[0]
+    return _analyze_inbody_record(sb, user, records, records[0])
+
+
+def analyze_inbody_record(user_id: str, inbody_id: str) -> HealthReport:
+    sb = get_supabase_admin()
+    user = _get_user(sb, user_id)
+    if not user.get("gender"):
+        raise AnalysisServiceError(
+            400,
+            "성별 정보를 먼저 입력해주세요. PATCH /users/me 로 gender를 설정하세요.",
+        )
+
+    records = _list_inbody_records(sb, user_id)
+    if not records:
+        raise AnalysisServiceError(400, "No InBody records yet")
+
+    target = next((record for record in records if record["id"] == inbody_id), None)
+    if not target:
+        raise AnalysisServiceError(404, "InBody record not found")
+
+    return _analyze_inbody_record(sb, user, records, target)
+
+
+def _analyze_inbody_record(
+    sb,
+    user: dict,
+    records: list[dict],
+    target: dict,
+) -> HealthReport:
     try:
-        disease_risks = predict_all(inbody=latest, user_profile=user)
+        disease_risks = predict_all(inbody=target, user_profile=user)
     except ValueError as e:
         raise AnalysisServiceError(400, str(e)) from e
 
@@ -49,20 +77,29 @@ def analyze_latest_inbody(user_id: str) -> HealthReport:
             disease_risks=disease_risks,
             user_profile=user,
             trend_analysis=trend_analysis,
-            inbody_metrics=latest,
+            inbody_metrics=target,
         )
     except ValueError as e:
         raise AnalysisServiceError(502, str(e)) from e
+    except Exception as e:
+        log.exception("failed to generate AI report")
+        raise AnalysisServiceError(502, "AI 리포트 생성 중 오류가 발생했습니다.") from e
 
-    report = HealthReport(
-        disease_risks=disease_risks,
-        lifestyle_tips=gemini_result["lifestyle_tips"],
-        supplement_tips=gemini_result["supplement_tips"],
-        cautions=gemini_result.get("cautions"),
-        trend_analysis=trend_analysis,
-    )
+    try:
+        report = HealthReport(
+            disease_risks=disease_risks,
+            trend_analysis=trend_analysis,
+            **gemini_result,
+        )
+    except Exception as e:
+        log.exception("failed to build health report")
+        raise AnalysisServiceError(502, "AI 리포트 응답 형식이 올바르지 않습니다.") from e
 
-    _save_report_and_cleanup_image(sb, latest, report)
+    try:
+        _save_report_and_cleanup_image(sb, target, report)
+    except Exception as e:
+        log.exception("failed to save AI report")
+        raise AnalysisServiceError(502, "AI 리포트 저장 중 오류가 발생했습니다.") from e
     return report
 
 

@@ -43,11 +43,70 @@ class TrendAnalysis(BaseModel):
     feature_trends: list[FeatureTrend]
 
 
-class HealthReport(BaseModel):
+class ReportSummary(BaseModel):
+    title: str
+    overall_message: str
+    key_focus: list[str]
+
+
+class MetricInsight(BaseModel):
+    metric: str
+    message: str
+
+
+class BodyWatchPoint(BaseModel):
+    metric: str
+    current_value: str
+    interpretation: str
+    priority: Literal["low", "medium", "high"]
+
+
+class BodyCompositionReport(BaseModel):
+    strengths: list[MetricInsight]
+    watch_points: list[BodyWatchPoint]
+
+
+class RiskReportItem(BaseModel):
+    disease: str
+    risk_level: RiskLevel
+    probability: float
+    main_factors: list[str]
+    message: str
+
+
+class LifestylePlanItem(BaseModel):
+    category: Literal["nutrition", "exercise", "sleep", "habit"]
+    title: str
+    reason: str
+    actions: list[str]
+
+
+class SupplementCandidate(BaseModel):
+    name: str
+    purpose: str
+    related_metrics: list[str]
+    evidence_level: Literal["general", "moderate", "limited"]
+    why_consider: str
+    cautions: list[str]
+    not_recommended_if: list[str]
+
+
+class ReportCautions(BaseModel):
+    medical_disclaimer: str
+    consult_doctor_if: list[str]
+
+
+class AIReportContent(BaseModel):
+    summary: ReportSummary
+    body_composition_report: BodyCompositionReport
+    risk_report: list[RiskReportItem]
+    lifestyle_plan: list[LifestylePlanItem]
+    supplement_candidates: list[SupplementCandidate]
+    cautions: ReportCautions
+
+
+class HealthReport(AIReportContent):
     disease_risks: list[DiseaseRisk]
-    lifestyle_tips: list[str]
-    supplement_tips: list[str]
-    cautions: str | None
     trend_analysis: TrendAnalysis | None = None
 
 
