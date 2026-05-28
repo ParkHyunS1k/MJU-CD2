@@ -122,7 +122,7 @@ export default function InBodyReviewScreen() {
     if (!ok) return;
     setAnalyzing(true);
     try {
-      const result = await api.analyzeInBody();
+      const result = await api.analyzeInBody(id);
       nav.replace('RiskScreen', { id, risks: result.disease_risks ?? [] });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : '분석 실패';

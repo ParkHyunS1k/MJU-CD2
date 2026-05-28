@@ -12,7 +12,14 @@ import {
 
 import { api } from '../lib/api';
 import type { InBodyStackParamList } from '../navigation/types';
-import type { AIReport, DiseaseRisk, RiskLevel } from '../types/models';
+import type {
+  AIReport,
+  BodyWatchPoint,
+  LifestylePlanItem,
+  RiskLevel,
+  RiskReportItem,
+  SupplementCandidate,
+} from '../types/models';
 
 type Rt = RouteProp<InBodyStackParamList, 'ReportScreen'>;
 
@@ -29,7 +36,20 @@ const RISK_CONFIG: Record<RiskLevel, { label: string; color: string; bg: string 
   high:   { label: '높음', color: '#b91c1c', bg: '#fee2e2' },
 };
 
-function RiskCard({ risk }: { risk: DiseaseRisk }) {
+const CATEGORY_LABEL: Record<LifestylePlanItem['category'], string> = {
+  nutrition: '식사',
+  exercise: '운동',
+  sleep: '수면',
+  habit: '습관',
+};
+
+const EVIDENCE_LABEL: Record<SupplementCandidate['evidence_level'], string> = {
+  general: '일반',
+  moderate: '보통',
+  limited: '제한적',
+};
+
+function RiskCard({ risk }: { risk: RiskReportItem }) {
   const cfg = RISK_CONFIG[risk.risk_level];
   const pct = (risk.probability * 100).toFixed(1);
   return (
@@ -46,6 +66,10 @@ function RiskCard({ risk }: { risk: DiseaseRisk }) {
         </View>
         <Text style={[styles.probText, { color: cfg.color }]}>{pct}%</Text>
       </View>
+      <Text style={styles.bodyText}>{risk.message}</Text>
+      {risk.main_factors.map((factor, idx) => (
+        <BulletItem key={idx} text={factor} />
+      ))}
     </View>
   );
 }
@@ -64,6 +88,58 @@ function BulletItem({ text }: { text: string }) {
     <View style={styles.bulletRow}>
       <Text style={styles.bullet}>•</Text>
       <Text style={styles.bulletText}>{text}</Text>
+    </View>
+  );
+}
+
+function WatchPoint({ item }: { item: BodyWatchPoint }) {
+  const cfg = RISK_CONFIG[item.priority];
+  return (
+    <View style={styles.detailBlock}>
+      <View style={styles.detailHeader}>
+        <Text style={styles.detailTitle}>{item.metric}</Text>
+        <View style={[styles.smallBadge, { backgroundColor: cfg.bg }]}>
+          <Text style={[styles.smallBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+        </View>
+      </View>
+      <Text style={styles.bodyText}>{item.current_value}</Text>
+      <Text style={styles.bodyText}>{item.interpretation}</Text>
+    </View>
+  );
+}
+
+function LifestylePlan({ item }: { item: LifestylePlanItem }) {
+  return (
+    <View style={styles.detailBlock}>
+      <Text style={styles.detailTitle}>
+        {CATEGORY_LABEL[item.category]} · {item.title}
+      </Text>
+      <Text style={styles.bodyText}>{item.reason}</Text>
+      {item.actions.map((action, idx) => (
+        <BulletItem key={idx} text={action} />
+      ))}
+    </View>
+  );
+}
+
+function SupplementCard({ item }: { item: SupplementCandidate }) {
+  return (
+    <View style={styles.detailBlock}>
+      <View style={styles.detailHeader}>
+        <Text style={styles.detailTitle}>{item.name}</Text>
+        <Text style={styles.metaText}>근거 {EVIDENCE_LABEL[item.evidence_level]}</Text>
+      </View>
+      <Text style={styles.bodyText}>{item.purpose}</Text>
+      <Text style={styles.bodyText}>{item.why_consider}</Text>
+      <Text style={styles.metaText}>관련 지표: {item.related_metrics.join(', ')}</Text>
+      {item.cautions.map((caution, idx) => (
+        <BulletItem key={`caution-${idx}`} text={caution} />
+      ))}
+      {item.not_recommended_if.length > 0 ? (
+        <Text style={styles.metaText}>
+          피해야 할 경우: {item.not_recommended_if.join(', ')}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -99,34 +175,54 @@ export default function ReportScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>AI 건강 리포트</Text>
+      <Text style={styles.title}>{report.summary.title}</Text>
+      <Text style={styles.summaryText}>{report.summary.overall_message}</Text>
 
-      {report.disease_risks?.length > 0 && (
+      <Section title="핵심 관리 포인트">
+        {report.summary.key_focus.map((focus, i) => (
+          <BulletItem key={i} text={focus} />
+        ))}
+      </Section>
+
+      <Section title="인바디 해석">
+        {report.body_composition_report.strengths.map((item, i) => (
+          <View key={`strength-${i}`} style={styles.detailBlock}>
+            <Text style={styles.detailTitle}>{item.metric}</Text>
+            <Text style={styles.bodyText}>{item.message}</Text>
+          </View>
+        ))}
+        {report.body_composition_report.watch_points.map((item, i) => (
+          <WatchPoint key={`watch-${i}`} item={item} />
+        ))}
+      </Section>
+
+      {report.risk_report.length > 0 && (
         <>
           <Text style={styles.sectionHeader}>성인병 위험도</Text>
-          {report.disease_risks.map((r) => (
+          {report.risk_report.map((r) => (
             <RiskCard key={r.disease} risk={r} />
           ))}
         </>
       )}
 
-      <Section title="🏃 생활습관 추천">
-        {report.lifestyle_tips.map((tip, i) => (
-          <BulletItem key={i} text={tip} />
+      <Section title="생활습관 계획">
+        {report.lifestyle_plan.map((item, i) => (
+          <LifestylePlan key={i} item={item} />
         ))}
       </Section>
 
-      <Section title="💊 영양제 추천">
-        {report.supplement_tips.map((tip, i) => (
-          <BulletItem key={i} text={tip} />
+      <Section title="보충제 후보">
+        {report.supplement_candidates.map((item, i) => (
+          <SupplementCard key={i} item={item} />
         ))}
       </Section>
 
-      {report.cautions ? (
-        <Section title="⚠️ 주의사항" warn>
-          <Text style={styles.cautionText}>{report.cautions}</Text>
-        </Section>
-      ) : null}
+      <Section title="주의사항" warn>
+        <Text style={styles.cautionText}>{report.cautions.medical_disclaimer}</Text>
+        {report.cautions.consult_doctor_if.map((item, i) => (
+          <BulletItem key={i} text={item} />
+        ))}
+      </Section>
 
       <TouchableOpacity
         style={styles.homeButton}
@@ -143,6 +239,7 @@ const styles = StyleSheet.create({
   empty: { color: '#999', fontSize: 15 },
   container: { padding: 20, gap: 16 },
   title: { fontSize: 22, fontWeight: '800', color: '#1a1a2e', marginBottom: 4 },
+  summaryText: { fontSize: 15, color: '#333', lineHeight: 23 },
   sectionHeader: { fontSize: 15, fontWeight: '700', color: '#555' },
   riskCard: {
     backgroundColor: '#fff',
@@ -177,6 +274,23 @@ const styles = StyleSheet.create({
   sectionWarn: { backgroundColor: '#fffbea', borderWidth: 1, borderColor: '#f0c674' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a2e', marginBottom: 4 },
   sectionTitleWarn: { color: '#92400e' },
+  detailBlock: {
+    borderTopWidth: 1,
+    borderTopColor: '#eef2f6',
+    paddingTop: 10,
+    gap: 5,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#1a1a2e' },
+  smallBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  smallBadgeText: { fontSize: 12, fontWeight: '700' },
+  bodyText: { fontSize: 14, color: '#333', lineHeight: 22 },
+  metaText: { fontSize: 12, color: '#666', lineHeight: 18 },
   bulletRow: { flexDirection: 'row', gap: 8 },
   bullet: { color: '#4f6ef7', fontSize: 15, lineHeight: 22 },
   bulletText: { flex: 1, fontSize: 14, color: '#333', lineHeight: 22 },

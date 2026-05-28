@@ -9,7 +9,32 @@ import {
 } from 'react-native';
 
 import { api } from '../lib/api';
-import type { AIReport } from '../types/models';
+import type {
+  AIReport,
+  BodyWatchPoint,
+  LifestylePlanItem,
+  RiskLevel,
+  SupplementCandidate,
+} from '../types/models';
+
+const PRIORITY_LABEL: Record<RiskLevel, string> = {
+  low: '낮음',
+  medium: '주의',
+  high: '높음',
+};
+
+const CATEGORY_LABEL: Record<LifestylePlanItem['category'], string> = {
+  nutrition: '식사',
+  exercise: '운동',
+  sleep: '수면',
+  habit: '습관',
+};
+
+const EVIDENCE_LABEL: Record<SupplementCandidate['evidence_level'], string> = {
+  general: '일반',
+  moderate: '보통',
+  limited: '제한적',
+};
 
 export default function AnalysisScreen() {
   const [report, setReport] = useState<AIReport | null>(null);
@@ -65,11 +90,45 @@ export default function AnalysisScreen() {
 function ReportView({ report }: { report: AIReport }) {
   return (
     <View style={{ gap: 12 }}>
-      <ListSection title="생활습관 추천" items={report.lifestyle_tips} />
-      <ListSection title="영양제 추천" items={report.supplement_tips} />
-      {report.cautions ? (
-        <Section title="주의사항" body={report.cautions} variant="warn" />
-      ) : null}
+      <Section title={report.summary.title} body={report.summary.overall_message} />
+      <ListSection title="핵심 관리 포인트" items={report.summary.key_focus} />
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>인바디 해석</Text>
+        {report.body_composition_report.strengths.map((item, idx) => (
+          <MetricInsightView key={`strength-${idx}`} metric={item.metric} message={item.message} />
+        ))}
+        {report.body_composition_report.watch_points.map((item, idx) => (
+          <WatchPointView key={`watch-${idx}`} item={item} />
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>생활습관 계획</Text>
+        {report.lifestyle_plan.map((item, idx) => (
+          <PlanItemView key={idx} item={item} />
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>보충제 후보</Text>
+        {report.supplement_candidates.map((item, idx) => (
+          <SupplementView key={idx} item={item} />
+        ))}
+      </View>
+
+      <View style={[styles.card, styles.cardWarn]}>
+        <Text style={[styles.cardTitle, styles.cardTitleWarn]}>주의사항</Text>
+        <Text style={[styles.cardBody, styles.cardBodyWarn]}>
+          {report.cautions.medical_disclaimer}
+        </Text>
+        {report.cautions.consult_doctor_if.map((item, idx) => (
+          <View key={idx} style={styles.listItem}>
+            <Text style={[styles.bullet, styles.bulletWarn]}>•</Text>
+            <Text style={[styles.listText, styles.cardBodyWarn]}>{item}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -110,6 +169,70 @@ function ListSection({ title, items }: { title: string; items: string[] }) {
   );
 }
 
+function MetricInsightView({ metric, message }: { metric: string; message: string }) {
+  return (
+    <View style={styles.subBlock}>
+      <Text style={styles.subTitle}>{metric}</Text>
+      <Text style={styles.cardBody}>{message}</Text>
+    </View>
+  );
+}
+
+function WatchPointView({ item }: { item: BodyWatchPoint }) {
+  return (
+    <View style={styles.subBlock}>
+      <View style={styles.inlineHeader}>
+        <Text style={styles.subTitle}>{item.metric}</Text>
+        <Text style={styles.metaText}>{PRIORITY_LABEL[item.priority]}</Text>
+      </View>
+      <Text style={styles.cardBody}>{item.current_value}</Text>
+      <Text style={styles.cardBody}>{item.interpretation}</Text>
+    </View>
+  );
+}
+
+function PlanItemView({ item }: { item: LifestylePlanItem }) {
+  return (
+    <View style={styles.subBlock}>
+      <Text style={styles.subTitle}>
+        {CATEGORY_LABEL[item.category]} · {item.title}
+      </Text>
+      <Text style={styles.cardBody}>{item.reason}</Text>
+      {item.actions.map((action, idx) => (
+        <View key={idx} style={styles.listItem}>
+          <Text style={styles.bullet}>•</Text>
+          <Text style={styles.listText}>{action}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SupplementView({ item }: { item: SupplementCandidate }) {
+  return (
+    <View style={styles.subBlock}>
+      <View style={styles.inlineHeader}>
+        <Text style={styles.subTitle}>{item.name}</Text>
+        <Text style={styles.metaText}>근거 {EVIDENCE_LABEL[item.evidence_level]}</Text>
+      </View>
+      <Text style={styles.cardBody}>{item.purpose}</Text>
+      <Text style={styles.cardBody}>{item.why_consider}</Text>
+      <Text style={styles.metaText}>관련 지표: {item.related_metrics.join(', ')}</Text>
+      {item.cautions.map((caution, idx) => (
+        <View key={`caution-${idx}`} style={styles.listItem}>
+          <Text style={styles.bullet}>•</Text>
+          <Text style={styles.listText}>{caution}</Text>
+        </View>
+      ))}
+      {item.not_recommended_if.length > 0 ? (
+        <Text style={styles.metaText}>
+          피해야 할 경우: {item.not_recommended_if.join(', ')}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { padding: 16, gap: 16 },
   title: { fontSize: 24, fontWeight: '700' },
@@ -146,11 +269,26 @@ const styles = StyleSheet.create({
   cardTitleWarn: { color: '#735c0f' },
   cardBody: { fontSize: 14, lineHeight: 21, color: '#24292e' },
   cardBodyWarn: { color: '#735c0f' },
+  subBlock: {
+    borderTopWidth: 1,
+    borderTopColor: '#eaeef2',
+    paddingTop: 8,
+    gap: 4,
+  },
+  inlineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    alignItems: 'center',
+  },
+  subTitle: { fontSize: 14, fontWeight: '700', color: '#24292e', flex: 1 },
+  metaText: { fontSize: 12, lineHeight: 18, color: '#57606a' },
   listItem: {
     flexDirection: 'row',
     gap: 8,
     marginTop: 4,
   },
   bullet: { fontSize: 14, color: '#1f6feb', lineHeight: 21 },
+  bulletWarn: { color: '#735c0f' },
   listText: { fontSize: 14, lineHeight: 21, color: '#24292e', flex: 1 },
 });

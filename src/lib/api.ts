@@ -90,6 +90,9 @@ export const api = {
     request<void>(`/inbody/${id}`, { method: 'DELETE' }),
   uploadInBody,
 
-  analyzeInBody: () =>
-    request<AnalysisResponse>('/ai/inbody/analyze', { method: 'POST' }),
+  analyzeInBody: (id?: string) =>
+    request<AnalysisResponse>(
+      id ? `/ai/inbody/${id}/analyze` : '/ai/inbody/analyze',
+      { method: 'POST' },
+    ),
 };

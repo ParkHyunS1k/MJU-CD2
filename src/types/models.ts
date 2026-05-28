@@ -25,11 +25,68 @@ export interface DiseaseRisk {
   top_factors: { feature_kor: string; value: number; shap_value: number; direction: 'up' | 'down' }[];
 }
 
+export interface ReportSummary {
+  title: string;
+  overall_message: string;
+  key_focus: string[];
+}
+
+export interface MetricInsight {
+  metric: string;
+  message: string;
+}
+
+export interface BodyWatchPoint {
+  metric: string;
+  current_value: string;
+  interpretation: string;
+  priority: RiskLevel;
+}
+
+export interface BodyCompositionReport {
+  strengths: MetricInsight[];
+  watch_points: BodyWatchPoint[];
+}
+
+export interface RiskReportItem {
+  disease: string;
+  risk_level: RiskLevel;
+  probability: number;
+  main_factors: string[];
+  message: string;
+}
+
+export interface LifestylePlanItem {
+  category: 'nutrition' | 'exercise' | 'sleep' | 'habit';
+  title: string;
+  reason: string;
+  actions: string[];
+}
+
+export interface SupplementCandidate {
+  name: string;
+  purpose: string;
+  related_metrics: string[];
+  evidence_level: 'general' | 'moderate' | 'limited';
+  why_consider: string;
+  cautions: string[];
+  not_recommended_if: string[];
+}
+
+export interface ReportCautions {
+  medical_disclaimer: string;
+  consult_doctor_if: string[];
+}
+
 export interface AIReport {
+  summary: ReportSummary;
+  body_composition_report: BodyCompositionReport;
+  risk_report: RiskReportItem[];
+  lifestyle_plan: LifestylePlanItem[];
+  supplement_candidates: SupplementCandidate[];
+  cautions: ReportCautions;
   disease_risks: DiseaseRisk[];
-  lifestyle_tips: string[];
-  supplement_tips: string[];
-  cautions: string | null;
+  trend_analysis?: unknown | null;
 }
 
 export interface InBodyRecord {
