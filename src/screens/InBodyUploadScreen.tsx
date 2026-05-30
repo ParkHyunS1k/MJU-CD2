@@ -2,20 +2,22 @@ import React, { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  ActivityIndicator,
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { api, UploadFile } from '../lib/api';
 import type { InBodyStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<InBodyStackParamList, 'InBodyUpload'>;
+
+const TEAL = '#00C2A8';
 
 function guessMimeFromUri(uri: string): string {
   const lower = uri.toLowerCase();
@@ -26,40 +28,33 @@ function guessMimeFromUri(uri: string): string {
   return 'image/jpeg';
 }
 
-function fileNameFromUri(uri: string): string {
-  const segs = uri.split('/');
-  return segs[segs.length - 1] || 'upload.jpg';
-}
-
-const OPTIONS = [
-  {
-    id: 'camera',
-    icon: '📷',
-    label: '카메라로 촬영',
-    desc: '인바디 결과지를 직접 찍어주세요',
-  },
-  {
-    id: 'gallery',
-    icon: '🖼️',
-    label: '갤러리에서 선택',
-    desc: '저장된 사진을 불러옵니다',
-  },
-  {
-    id: 'pdf',
-    icon: '📄',
-    label: 'PDF / 파일 선택',
-    desc: 'PDF 또는 이미지 파일을 선택하세요',
-  },
-] as const;
-
 export default function InBodyUploadScreen() {
   const nav = useNavigation<Nav>();
   const [busy, setBusy] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<UploadFile | null>(null);
 
-  const upload = async (file: UploadFile) => {
+  const pickFile = async () => {
+    const res = await DocumentPicker.getDocumentAsync({
+      type: ['image/*', 'application/pdf'],
+      copyToCacheDirectory: true,
+    });
+    if (res.canceled) return;
+    const asset = res.assets[0];
+    setSelectedFile({
+      uri: asset.uri,
+      name: asset.name,
+      type: asset.mimeType ?? guessMimeFromUri(asset.name),
+    });
+  };
+
+  const handleAnalyze = async () => {
+    if (!selectedFile) {
+      await pickFile();
+      return;
+    }
     setBusy(true);
     try {
-      const res = await api.uploadInBody(file);
+      const res = await api.uploadInBody(selectedFile);
       nav.replace('InBodyReview', {
         id: res.record.id,
         confidence: res.extraction_confidence,
@@ -73,173 +68,143 @@ export default function InBodyUploadScreen() {
     }
   };
 
-  const handleOption = async (id: (typeof OPTIONS)[number]['id']) => {
-    if (id === 'camera') {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.');
-        return;
-      }
-      const res = await ImagePicker.launchCameraAsync({ quality: 0.9 });
-      if (res.canceled) return;
-      const asset = res.assets[0];
-      await upload({ uri: asset.uri, name: fileNameFromUri(asset.uri), type: asset.mimeType ?? guessMimeFromUri(asset.uri) });
-    } else if (id === 'gallery') {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
-        return;
-      }
-      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 });
-      if (res.canceled) return;
-      const asset = res.assets[0];
-      await upload({ uri: asset.uri, name: fileNameFromUri(asset.uri), type: asset.mimeType ?? guessMimeFromUri(asset.uri) });
-    } else {
-      const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
-      if (res.canceled) return;
-      const asset = res.assets[0];
-      await upload({ uri: asset.uri, name: asset.name, type: asset.mimeType ?? guessMimeFromUri(asset.name) });
-    }
-  };
-
-  if (busy) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4f6ef7" />
-        <Text style={styles.loadingTitle}>AI가 분석 중입니다</Text>
-        <Text style={styles.loadingDesc}>인바디 수치를 자동으로 추출하고 있어요{'\n'}약 5~10초 소요됩니다</Text>
-      </View>
-    );
-  }
+  const INFO_ITEMS = [
+    '인바디 앱 PDF 출력물',
+    '인바디 측정지 사진 (JPG, PNG, HEIC)',
+    '최대 파일 크기: 10MB',
+    '여러 파일 동시 업로드 가능',
+  ];
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topSection}>
-        <Text style={styles.badge}>AI 자동 추출</Text>
-        <Text style={styles.title}>인바디 결과지{'\n'}업로드</Text>
-        <Text style={styles.desc}>
-          사진 촬영 또는 파일 선택 시{'\n'}AI가 수치를 자동으로 읽어드립니다
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>인바디 데이터 업로드</Text>
+      </View>
+
+      <View style={styles.body}>
+        <Text style={styles.bodyTitle}>파일을 업로드하세요</Text>
+        <Text style={styles.bodyDesc}>
+          인바디 앱에서 내보낸 측정 결과 또는 인바디 측정지 사진을 업로드해 주세요.
         </Text>
-      </View>
 
-      <View style={styles.options}>
-        {OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.id}
-            style={styles.optionCard}
-            onPress={() => handleOption(opt.id)}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.optionIcon}>{opt.icon}</Text>
-            <View style={styles.optionText}>
-              <Text style={styles.optionLabel}>{opt.label}</Text>
-              <Text style={styles.optionDesc}>{opt.desc}</Text>
+        <TouchableOpacity style={styles.uploadZone} onPress={pickFile} activeOpacity={0.7}>
+          <Ionicons name="cloud-upload-outline" size={40} color="#CCCCCC" />
+          <Text style={styles.uploadZoneTitle}>
+            {selectedFile ? selectedFile.name : '파일을 드래그하거나 클릭하여 선택'}
+          </Text>
+          <Text style={styles.uploadZoneSub}>PDF, JPG, PNG, HEIC 파일 지원</Text>
+          {selectedFile && (
+            <View style={styles.fileSelectedBadge}>
+              <Ionicons name="checkmark-circle" size={14} color={TEAL} />
+              <Text style={styles.fileSelectedText}>파일 선택됨</Text>
             </View>
-            <Text style={styles.optionArrow}>›</Text>
-          </TouchableOpacity>
-        ))}
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.infoBox}>
+          <Text style={styles.infoTitle}>업로드 가능한 파일</Text>
+          {INFO_ITEMS.map((item) => (
+            <View key={item} style={styles.infoRow}>
+              <Text style={styles.infoBullet}>·</Text>
+              <Text style={styles.infoText}>{item}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
-      <Text style={styles.footer}>
-        지원 형식: JPG · PNG · HEIC · PDF
-      </Text>
-    </View>
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.primaryBtn, selectedFile && !busy && styles.primaryBtnActive]}
+          onPress={handleAnalyze}
+          disabled={busy}
+        >
+          <Text style={styles.primaryBtnText}>
+            {busy ? '업로드 중...' : '분석 시작하기'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => nav.goBack()}
+          disabled={busy}
+        >
+          <Text style={styles.secondaryBtnText}>나중에 하기</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f0f4f8',
-    padding: 24,
-  },
-  topSection: {
-    marginTop: 8,
-    marginBottom: 32,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#e8edff',
-    color: '#4f6ef7',
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1a1a2e',
-    lineHeight: 36,
-    marginBottom: 10,
-  },
-  desc: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 22,
-  },
-  options: {
-    gap: 12,
-  },
-  optionCard: {
-    flexDirection: 'row',
+  scroll: { flex: 1, backgroundColor: '#F5F5F5' },
+  content: { flexGrow: 1 },
+
+  header: {
+    backgroundColor: TEAL,
+    paddingTop: 60,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
     alignItems: 'center',
+  },
+  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
+  body: { flex: 1, padding: 20 },
+  bodyTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },
+  bodyDesc: { fontSize: 13, color: '#757575', lineHeight: 20, marginBottom: 20 },
+
+  uploadZone: {
     backgroundColor: '#fff',
     borderRadius: 14,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  optionIcon: {
-    fontSize: 28,
-    marginRight: 14,
-  },
-  optionText: {
-    flex: 1,
-  },
-  optionLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a2e',
-    marginBottom: 3,
-  },
-  optionDesc: {
-    fontSize: 13,
-    color: '#888',
-  },
-  optionArrow: {
-    fontSize: 22,
-    color: '#ccc',
-    fontWeight: '300',
-  },
-  footer: {
-    textAlign: 'center',
-    color: '#aaa',
-    fontSize: 12,
-    marginTop: 28,
-  },
-  loadingContainer: {
-    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E5E5E5',
+    paddingVertical: 36,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f0f4f8',
-    gap: 16,
+    gap: 8,
+    marginBottom: 16,
   },
-  loadingTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a2e',
-  },
-  loadingDesc: {
+  uploadZoneTitle: {
     fontSize: 14,
-    color: '#666',
+    fontWeight: '600',
+    color: '#555',
     textAlign: 'center',
-    lineHeight: 22,
+    paddingHorizontal: 16,
   },
+  uploadZoneSub: { fontSize: 12, color: '#AAAAAA' },
+  fileSelectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  fileSelectedText: { fontSize: 12, color: TEAL, fontWeight: '600' },
+
+  infoBox: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+  },
+  infoTitle: { fontSize: 13, fontWeight: '700', color: '#333', marginBottom: 10 },
+  infoRow: { flexDirection: 'row', gap: 6, marginBottom: 5 },
+  infoBullet: { fontSize: 13, color: '#999' },
+  infoText: { fontSize: 13, color: '#666', flex: 1 },
+
+  footer: { padding: 20, gap: 10 },
+  primaryBtn: {
+    backgroundColor: '#9E9E9E',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  primaryBtnActive: { backgroundColor: TEAL },
+  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  secondaryBtn: {
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    backgroundColor: '#fff',
+  },
+  secondaryBtnText: { fontSize: 15, color: '#555' },
 });

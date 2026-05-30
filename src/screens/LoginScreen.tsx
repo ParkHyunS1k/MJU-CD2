@@ -3,37 +3,42 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useAuth } from '../contexts/AuthContext';
+import type { AuthStackParamList } from '../navigation/types';
+
+type NavProp = NativeStackNavigationProp<AuthStackParamList>;
 
 export default function LoginScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
+  const navigation = useNavigation<NavProp>();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [showPw, setShowPw] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const onSubmit = async () => {
+  const onLogin = async () => {
     if (!email || !password) {
       Alert.alert('이메일과 비밀번호를 입력해주세요.');
       return;
     }
     setBusy(true);
     try {
-      if (mode === 'signin') {
-        await signIn(email.trim(), password);
-      } else {
-        await signUp(email.trim(), password);
-        Alert.alert('가입 완료', '이메일 확인이 필요할 수 있습니다.');
-      }
+      await signIn(email.trim(), password);
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : '오류가 발생했습니다.';
+      const message = e instanceof Error ? e.message : '로그인에 실패했습니다.';
       Alert.alert('실패', message);
     } finally {
       setBusy(false);
@@ -42,125 +47,250 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Healthcare</Text>
-        <Text style={styles.subtitle}>
-          {mode === 'signin' ? '계정에 로그인하세요' : '새 계정을 만드세요'}
-        </Text>
-      </View>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>로그인</Text>
+          <Text style={styles.headerSubtitle}>건강 관리를 시작하세요</Text>
+        </View>
 
-      <View style={styles.card}>
-        <TextInput
-          style={styles.input}
-          placeholder="이메일"
-          placeholderTextColor="#999"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          editable={!busy}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="비밀번호"
-          placeholderTextColor="#999"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          editable={!busy}
-        />
+        <View style={styles.form}>
+          <Text style={styles.label}>이메일</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="이메일을 입력하세요"
+            placeholderTextColor="#BBBBBB"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+            editable={!busy}
+          />
 
-        <TouchableOpacity
-          style={[styles.button, busy && styles.buttonDisabled]}
-          onPress={onSubmit}
-          disabled={busy}
-        >
-          <Text style={styles.buttonText}>
-            {mode === 'signin' ? '로그인' : '가입하기'}
-          </Text>
-        </TouchableOpacity>
+          <Text style={styles.label}>비밀번호</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.inputFlex}
+              placeholder="비밀번호를 입력하세요"
+              placeholderTextColor="#BBBBBB"
+              secureTextEntry={!showPw}
+              value={password}
+              onChangeText={setPassword}
+              editable={!busy}
+            />
+            <TouchableOpacity onPress={() => setShowPw(!showPw)} style={styles.eyeBtn}>
+              <Ionicons name={showPw ? 'eye-outline' : 'eye-off-outline'} size={20} color="#999" />
+            </TouchableOpacity>
+          </View>
 
-        <TouchableOpacity
-          onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-          disabled={busy}
-          style={styles.toggleButton}
-        >
-          <Text style={styles.toggleText}>
-            {mode === 'signin'
-              ? '계정이 없으신가요? 회원가입'
-              : '이미 계정이 있으신가요? 로그인'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.rememberRow}>
+            <TouchableOpacity
+              style={styles.checkRow}
+              onPress={() => setRememberMe(!rememberMe)}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && <Ionicons name="checkmark" size={12} color="#fff" />}
+              </View>
+              <Text style={styles.rememberText}>로그인 유지</Text>
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <Text style={styles.forgotText}>비밀번호 찾기</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.primaryButton, busy && styles.buttonDisabled]}
+            onPress={onLogin}
+            disabled={busy}
+          >
+            <Text style={styles.primaryButtonText}>로그인</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>또는</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity style={styles.socialButton}>
+            <Text style={styles.socialButtonText}>Google로 계속하기</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.socialButton}>
+            <Text style={styles.socialButtonText}>Kakao로 계속하기</Text>
+          </TouchableOpacity>
+
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>계정이 없으신가요? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.signupLink}>회원가입</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#f0f4f8',
-  },
+  flex: { flex: 1, backgroundColor: '#F5F5F5' },
+  content: { flexGrow: 1 },
+
   header: {
+    backgroundColor: '#00C2A8',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingTop: 70,
+    paddingBottom: 32,
     alignItems: 'center',
-    marginBottom: 32,
   },
-  title: {
-    fontSize: 32,
+  headerTitle: {
+    fontSize: 26,
     fontWeight: '700',
-    color: '#1a1a2e',
+    color: '#fff',
     marginBottom: 6,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.85)',
   },
-  card: {
+
+  form: {
     backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 20,
     borderRadius: 16,
-    padding: 24,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 32,
   },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    color: '#1a1a2e',
-    marginBottom: 14,
-    backgroundColor: '#fafafa',
-  },
-  button: {
-    backgroundColor: '#4f6ef7',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
+
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
     marginTop: 4,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#1A1A1A',
+    backgroundColor: '#FAFAFA',
+    marginBottom: 14,
   },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 10,
+    backgroundColor: '#FAFAFA',
+    marginBottom: 14,
   },
-  toggleButton: {
-    marginTop: 16,
+  inputFlex: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#1A1A1A',
+  },
+  eyeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  checkRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  toggleText: {
-    color: '#4f6ef7',
-    fontSize: 14,
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#CCCCCC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 7,
   },
+  checkboxChecked: {
+    backgroundColor: '#00C2A8',
+    borderColor: '#00C2A8',
+  },
+  rememberText: {
+    fontSize: 13,
+    color: '#555',
+  },
+  forgotText: {
+    fontSize: 13,
+    color: '#00C2A8',
+  },
+
+  primaryButton: {
+    backgroundColor: '#00C2A8',
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  buttonDisabled: { opacity: 0.6 },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E5E5',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 13,
+    color: '#AAAAAA',
+  },
+
+  socialButton: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  socialButtonText: {
+    fontSize: 14,
+    color: '#333',
+  },
+
+  signupRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  signupText: { fontSize: 13, color: '#888' },
+  signupLink: { fontSize: 13, color: '#00C2A8', fontWeight: '600' },
 });

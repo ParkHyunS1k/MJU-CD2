@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,128 +9,233 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
-import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
-import type { InBodyRecord, UserProfile } from '../types/models';
+import type { InBodyRecord } from '../types/models';
+
+const TEAL = '#00C2A8';
+
+function getOverallRisk(record: InBodyRecord): string {
+  const risks = record.ai_report?.risk_report;
+  if (!risks?.length) return '낮음';
+  if (risks.some((r) => r.risk_level === 'high')) return '높음';
+  if (risks.some((r) => r.risk_level === 'medium')) return '보통';
+  return '낮음';
+}
+
+function formatYearMonth(dateStr: string | null): string {
+  if (!dateStr) return '날짜 없음';
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+}
 
 export default function HomeScreen() {
-  const { signOut } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [latest, setLatest] = useState<InBodyRecord | null>(null);
+  const navigation = useNavigation<any>();
+  const [records, setRecords] = useState<InBodyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [me, logs] = await Promise.all([
-        api.getMe().catch(() => null),
-        api.listInBody(1).catch(() => []),
-      ]);
-      setProfile(me);
-      setLatest(logs[0] ?? null);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : '불러오기 실패';
-      Alert.alert('오류', message);
+      const data = await api.listInBody(5).catch(() => []);
+      setRecords(data);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const latest = records[0] ?? null;
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={TEAL} />
       </View>
     );
   }
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            load();
-          }}
+          onRefresh={() => { setRefreshing(true); load(); }}
+          tintColor={TEAL}
         />
       }
     >
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>내 정보</Text>
-        <Text style={styles.cardTitle}>
-          {profile?.nickname ?? '닉네임 없음'}
-        </Text>
-        <Text style={styles.cardSub}>
-          {profile?.gender ?? '-'} · {profile?.birth_year ?? '-'}년생
-        </Text>
-        <Text style={styles.cardSub}>
-          목표: {profile?.fitness_goal ?? '미설정'}
-        </Text>
+      <View style={styles.header}>
+        <Text style={styles.headerGreet}>안녕하세요 👋</Text>
+        <Text style={styles.headerTitle}>오늘의 건강 체크</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>최근 InBody</Text>
-        {latest ? (
-          <>
-            <Text style={styles.cardTitle}>{latest.weight} kg</Text>
-            <Text style={styles.cardSub}>
-              체지방률 {latest.body_fat_percentage ?? '-'}% · 골격근{' '}
-              {latest.skeletal_muscle_mass ?? '-'}kg
-            </Text>
-            <Text style={styles.cardSub}>
-              측정일{' '}
-              {latest.measured_at
-                ? new Date(latest.measured_at).toLocaleDateString()
-                : '-'}
-            </Text>
-          </>
-        ) : (
-          <Text style={styles.cardSub}>아직 기록이 없습니다.</Text>
-        )}
+      {/* 내 건강 현황 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>내 건강 현황</Text>
+        <View style={styles.statusCard}>
+          {latest ? (
+            <View style={styles.statusRow}>
+              <View style={styles.statusLeft}>
+                <Text style={styles.statusLabel}>최근 분석</Text>
+                <Text style={styles.statusMain}>
+                  {formatYearMonth(latest.measured_at)} · 위험도 {getOverallRisk(latest)}
+                </Text>
+                <View style={styles.tagRow}>
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>정상</Text>
+                  </View>
+                  {latest.ai_report?.risk_report?.some((r) => r.risk_level === 'medium') && (
+                    <View style={[styles.tag, styles.tagOrange]}>
+                      <Text style={[styles.tagText, styles.tagTextOrange]}>재진찰 주의</Text>
+                    </View>
+                  )}
+                  {(latest.skeletal_muscle_mass ?? 0) >= 28 && (
+                    <View style={[styles.tag, styles.tagGreen]}>
+                      <Text style={[styles.tagText, styles.tagTextGreen]}>근육량 양호</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.resultBtn}
+                onPress={() => navigation.navigate('Records', {
+                  screen: 'InBodyDetail',
+                  params: { id: latest.id },
+                })}
+              >
+                <Text style={styles.resultBtnText}>분석 결과{'\n'}보기</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>아직 분석 기록이 없습니다.</Text>
+          )}
+        </View>
       </View>
 
-      <TouchableOpacity
-        style={styles.signOut}
-        onPress={() => {
-          Alert.alert('로그아웃', '정말 로그아웃 하시겠습니까?', [
-            { text: '취소', style: 'cancel' },
-            { text: '로그아웃', style: 'destructive', onPress: signOut },
-          ]);
-        }}
-      >
-        <Text style={styles.signOutText}>로그아웃</Text>
-      </TouchableOpacity>
+      {/* 인바디 파일 업로드 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>인바디 파일 업로드</Text>
+        <Text style={styles.uploadDesc}>
+          최신 인바디 측정 결과를 업로드하여 건강 위험도를 분석해 드립니다.
+        </Text>
+        <TouchableOpacity
+          style={styles.uploadBtn}
+          onPress={() => navigation.navigate('Records', { screen: 'InBodyUpload' })}
+        >
+          <Text style={styles.uploadBtnText}>파일 업로드 시작</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 최근 기록 */}
+      {records.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>최근 기록</Text>
+          {records.slice(0, 3).map((rec) => (
+            <TouchableOpacity
+              key={rec.id}
+              style={styles.recordRow}
+              onPress={() => navigation.navigate('Records', {
+                screen: 'InBodyDetail',
+                params: { id: rec.id },
+              })}
+            >
+              <View>
+                <Text style={styles.recordTitle}>{formatYearMonth(rec.measured_at)} 측정</Text>
+                <Text style={styles.recordSub}>위험도: {getOverallRisk(rec)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#CCCCCC" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 12 },
+  scroll: { flex: 1, backgroundColor: '#F5F5F5' },
+  content: { paddingBottom: 32 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  card: {
-    backgroundColor: '#f6f8fa',
+
+  header: {
+    backgroundColor: TEAL,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    paddingTop: 60,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  headerGreet: { color: 'rgba(255,255,255,0.85)', fontSize: 14, marginBottom: 4 },
+  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
+
+  section: { marginHorizontal: 16, marginTop: 20 },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#1A1A1A', marginBottom: 12 },
+
+  statusCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
     padding: 16,
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e1e4e8',
+    borderColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  cardLabel: { fontSize: 12, color: '#666', marginBottom: 4 },
-  cardTitle: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
-  cardSub: { fontSize: 14, color: '#444', marginTop: 2 },
-  signOut: {
-    marginTop: 24,
+  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  statusLeft: { flex: 1 },
+  statusLabel: { fontSize: 12, color: '#999', marginBottom: 4 },
+  statusMain: { fontSize: 16, fontWeight: '700', color: '#1A1A1A', marginBottom: 10 },
+  tagRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  tag: { backgroundColor: '#F0F0F0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  tagText: { fontSize: 11, color: '#555' },
+  tagOrange: { backgroundColor: '#FFF3E0' },
+  tagTextOrange: { color: '#E65100' },
+  tagGreen: { backgroundColor: '#E8F5E9' },
+  tagTextGreen: { color: '#2E7D32' },
+  resultBtn: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     alignItems: 'center',
-    padding: 12,
+    marginLeft: 12,
   },
-  signOutText: { color: '#d73a49', fontWeight: '600' },
+  resultBtnText: { fontSize: 12, color: '#333', textAlign: 'center', lineHeight: 17 },
+  emptyText: { fontSize: 14, color: '#999' },
+
+  uploadDesc: { fontSize: 13, color: '#757575', lineHeight: 20, marginBottom: 14 },
+  uploadBtn: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  uploadBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  recordRow: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  recordTitle: { fontSize: 15, fontWeight: '600', color: '#1A1A1A', marginBottom: 3 },
+  recordSub: { fontSize: 13, color: '#999' },
+
 });
+
