@@ -35,7 +35,7 @@ npm install
 
 ## 환경 변수
 
-`mobile/.env.example`을 복사해서 `mobile/.env`를 만들고 값을 채워주세요.
+`.env.example`을 복사해서 `.env`를 만들고 값을 채워주세요.
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
