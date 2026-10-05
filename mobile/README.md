@@ -40,8 +40,11 @@ npm install
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
-EXPO_PUBLIC_API_BASE_URL=http://<백엔드 호스트>:8000
+EXPO_PUBLIC_API_BASE_URL=https://care-production-abf2.up.railway.app
 ```
+
+비밀 값은 필요 없습니다. Supabase URL·anon 키는 공개용이고, API 주소는 Railway 배포 서버입니다.
+로컬 FastAPI를 띄워 테스트할 때만 `EXPO_PUBLIC_API_BASE_URL`을 아래처럼 바꾸세요.
 
 - iOS 시뮬레이터에서 로컬 FastAPI를 호출할 때는 `http://localhost:8000` OK
 - Android 에뮬레이터: `http://10.0.2.2:8000`
