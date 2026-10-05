@@ -12,4 +12,3 @@ venv/
 # 로컬 도구 설정
 .omc/
 .omx/
-.mcp.json
