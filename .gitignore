@@ -9,6 +9,7 @@ venv/
 .idea/
 .DS_Store
 node_modules
-.mcp.json
 .codex/
 .expo/
+.omc/
+.omx/
