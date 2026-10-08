@@ -7,6 +7,9 @@
 | --- | --- |
 | `retrain_final.py` | 배포용 최종 모델 7개를 학습해 `../models/`에 저장 |
 | `train_models.py` | 모델·피처셋 비교 실험 (5-fold CV, AUROC/PR-AUC/Brier). 결과는 `output/` |
+| `analysis/knhanes_compare.py` | KNHANES에서 BIA 변수 vs BMI·허리둘레 예측력 비교, 현행 라벨과 비교 |
+| `analysis/kaggle_check.py` | Kaggle 국민체력100 품질·고혈압 라벨 잡음, KNHANES 모델 외부검증 |
+| `analysis/nhanes_check.py` | NHANES 2003–04 BIA 라벨 생성·예측력, KNHANES 모델 외부검증 |
 
 ## 데이터
 
@@ -14,12 +17,20 @@
 질병관리청 국민건강영양조사 홈페이지에서 이용 신청 후 받아 `training/data/`에 넣으세요.
 원시자료는 재배포하지 않으므로 Git에 올리지 않습니다(`.gitignore` 처리됨).
 
+외부검증용 데이터는 `training/data/ext/`에 둡니다.
+
+| 파일 | 출처 |
+| --- | --- |
+| `ext/bodyPerformance.csv` | Kaggle Body Performance(국민체력100). 사본: github.com/mrinalcs/body-performance `data.csv` |
+| `ext/nhanes/{bix,demo,bmx,bpx,bpq,diq,l10,l10am,l13,l13am}_c.rda` | NHANES 2003–04. 사본: github.com/vandomed/nhanesdata `data/` |
+
 ## 실행
 
 ```bash
 pip install -r training/requirements.txt
 python training/retrain_final.py     # ../models/*.pkl 덮어씀
 python training/train_models.py      # 비교 실험
+cd training/analysis && python knhanes_compare.py   # 분석 스크립트는 analysis/ 안에서 실행
 ```
 
 ## pkl 형식
