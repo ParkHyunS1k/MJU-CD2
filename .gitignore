@@ -12,3 +12,7 @@ venv/
 node_modules
 .omc/
 .omx/
+
+# 학습 데이터(국민건강영양조사 원시자료)와 실험 산출물
+training/data/
+training/output/

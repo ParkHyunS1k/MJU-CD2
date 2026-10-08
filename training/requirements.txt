@@ -1,0 +1,9 @@
+# 학습 전용. 서버(../requirements.txt)에는 필요 없음.
+# 현재 ../models/*.pkl 은 scikit-learn 1.8.0 으로 학습됨. 서버도 같은 버전이어야 경고·호환 패치 없이 로드된다.
+scikit-learn==1.8.0
+imbalanced-learn==0.14.2
+pandas==2.3.3
+numpy==2.3.5
+joblib==1.5.2
+xgboost==3.2.0
+lightgbm==4.6.0
