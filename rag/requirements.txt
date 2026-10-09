@@ -1,0 +1,2 @@
+# 수집 전용. 서버(../requirements.txt)에는 필요 없음.
+pymupdf==1.28.2
