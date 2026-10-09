@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from rag.sections import Section
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_TAIL_START = re.compile(r"(?<=[.!?])\s+|\n")
 
 Unit = tuple[str, int]  # (텍스트, 쪽 번호)
 
@@ -31,6 +32,13 @@ def _size(units: list[Unit]) -> int:
     return sum(len(text) for text, _ in units) + max(len(units) - 1, 0)
 
 
+def _tail(body: str, overlap: int) -> str:
+    """직전 청크 끝 overlap 글자. 그 안에 문장·줄 경계가 있으면 경계 다음부터."""
+    tail = body[-overlap:] if overlap else ""
+    match = _TAIL_START.search(tail)
+    return tail[match.end():] if match and match.end() < len(tail) else tail
+
+
 def chunk_section(section: Section, max_chars: int = 1200, overlap: int = 150) -> list[Chunk]:
     if not 0 <= overlap < max_chars:
         raise ValueError("overlap must satisfy 0 <= overlap < max_chars")
@@ -46,11 +54,8 @@ def chunk_section(section: Section, max_chars: int = 1200, overlap: int = 150) -
     for unit in _units(section, max_chars):
         if current and _size(current + [unit]) > max_chars:
             emit()
-            carried: list[Unit] = []
-            for previous in reversed(current):
-                if _size([previous] + carried) > overlap:
-                    break
-                carried.insert(0, previous)
+            tail = _tail(chunks[-1].body, overlap)
+            carried = [(tail, current[-1][1])] if tail else []
             current = carried if _size(carried + [unit]) <= max_chars else []
         current.append(unit)
 

@@ -56,3 +56,18 @@ def test_numbered_references_title_dropped():
     toc = [TocEntry(1, "1. 운동", 1), TocEntry(1, "5. 참고 문헌", 2)]
     sections = build_sections(blocks, toc)
     assert [s.heading_path for s in sections] == [["1. 운동"]]
+
+
+def test_heading_merged_with_body_keeps_body():
+    block = _b(1, 100, "1. 생활요법\n나트륨 섭취를 하루 2g 이하로 줄인다.\n체중을 감량한다.")
+    sections = build_sections([block], [TocEntry(1, "1. 생활요법", 1)])
+    assert [(s.heading_path, s.blocks) for s in sections] == [(["1. 생활요법"], [block])]
+
+
+def test_unmatched_entry_on_same_page_does_not_steal_previous_section():
+    blocks = [_b(5, 100, "2.1 나트륨"), _b(5, 200, "나트륨 본문"), _b(5, 300, "2.2. 칼륨 섭취"), _b(5, 400, "칼륨 본문")]
+    toc = [TocEntry(2, "2.1 나트륨", 5), TocEntry(2, "2.2 칼륨", 5)]
+    sections = build_sections(blocks, toc)
+    assert [(s.heading_path, [b.text for b in s.blocks]) for s in sections] == [
+        (["2.1 나트륨"], ["나트륨 본문", "2.2. 칼륨 섭취", "칼륨 본문"]),
+    ]

@@ -37,7 +37,7 @@ def parse_pdf(path: Path) -> ParsedDoc:
     with pymupdf.open(path) as doc:
         for page in doc:
             heights.append(page.rect.height)
-            for _x0, y0, _x1, y1, text, _no, kind in page.get_text("blocks", sort=True):
+            for _x0, y0, _x1, y1, text, _no, kind in page.get_text("blocks"):
                 text = _nfc(text)
                 if kind == 0 and text:
                     blocks.append(Block(page.number + 1, y0, y1, text))

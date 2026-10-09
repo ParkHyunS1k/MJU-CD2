@@ -49,3 +49,12 @@ def test_empty_section_no_chunks():
 def test_invalid_overlap(overlap):
     with pytest.raises(ValueError):
         chunk_section(_section((1, "가")), max_chars=100, overlap=overlap)
+
+
+def test_overlap_carries_tail_of_long_paragraphs():
+    paragraphs = [(1, " ".join(f"{i}번 문단 {j}번 문장을 읽는다." for j in range(12))) for i in range(10)]
+    chunks = chunk_section(_section(*paragraphs), max_chars=1200, overlap=150)
+    assert len(chunks) > 1
+    for prev, nxt in zip(chunks, chunks[1:]):
+        shared = max(k for k in range(151) if prev.body.endswith(nxt.body[:k]))
+        assert 0 < shared <= 150

@@ -31,14 +31,14 @@ def ingest(
             log.exception("[%s] failed to parse %s", source.id, path)
             stats["failed"].append(source.id)
             continue
-        if not parsed.blocks:
+        blocks = clean_blocks(parsed.blocks, parsed.page_heights)
+        if not blocks:
             log.warning("[%s] no text layer (scanned PDF?); skipped", source.id)
             stats["skipped_no_text"].append(source.id)
             continue
         if not parsed.toc:
             stats["no_toc"].append(source.id)
 
-        blocks = clean_blocks(parsed.blocks, parsed.page_heights)
         chunks = [
             chunk
             for section in build_sections(blocks, parsed.toc)

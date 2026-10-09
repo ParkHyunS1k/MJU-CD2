@@ -4,10 +4,16 @@ from rag.parse import Block
 
 _PAGE_NUMBER = re.compile(r"^[-–—\s]*\d{1,4}[-–—\s]*$")
 _EDGE_RATIO = 0.08
+_TOC_LINE = re.compile(r"(?:[.·]{3,}|[…‥]{2,})\s*\d+\s*$")
 
 
 def _signature(text: str) -> str:
     return re.sub(r"\d+", "#", re.sub(r"\s+", " ", text)).strip()
+
+
+def _is_toc_listing(text: str) -> bool:
+    lines = [line for line in text.splitlines() if line.strip()]
+    return bool(lines) and sum(bool(_TOC_LINE.search(line)) for line in lines) * 2 >= len(lines)
 
 
 def clean_blocks(blocks: list[Block], page_heights: list[float]) -> list[Block]:
@@ -26,6 +32,7 @@ def clean_blocks(blocks: list[Block], page_heights: list[float]) -> list[Block]:
     return [
         block
         for block in blocks
-        if not _PAGE_NUMBER.match(block.text)
+        if not _is_toc_listing(block.text)
+        and not (at_edge(block) and _PAGE_NUMBER.match(block.text))
         and not (at_edge(block) and _signature(block.text) in repeated)
     ]

@@ -94,3 +94,11 @@ def test_main_returns_1_on_bad_sources(tmp_path):
     out = tmp_path / "chunks.jsonl"
     assert main(["--sources", str(sources), "--raw-dir", str(tmp_path), "--out", str(out)]) == 1
     assert not out.exists()
+
+
+def test_ingest_skips_pdf_with_only_page_numbers(tmp_path, make_pdf):
+    make_pdf("scan2.pdf", [[(820, f"- {n} -")] for n in range(1, 6)])
+    records, stats = ingest(_sources(tmp_path, [_entry("scan2", "scan2.pdf")]), tmp_path)
+    assert records == []
+    assert stats["skipped_no_text"] == ["scan2"]
+    assert stats["documents"] == 0
