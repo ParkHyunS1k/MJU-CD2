@@ -1,1 +1,167 @@
-[]
+[
+  {
+    "id": "kha-hypertension-2026",
+    "file": "kha_hypertension_2026.pdf",
+    "title": "2026년 고혈압 진료지침 제6판",
+    "publisher": "대한고혈압학회",
+    "year": 2026,
+    "url": "https://www.koreanhypertension.org/reference/guide?mode=read&idno=10446",
+    "license_note": "학회 홈페이지 무료 공개. All rights reserved, 별도 이용조건 미기재",
+    "conditions": ["hypertension"],
+    "category": "lifestyle",
+    "sections": [
+      {"title": "고혈압의 정의와 분류, 현황", "pages": [21, 26], "category": "criteria"},
+      {"title": "소금 섭취와 고혈압", "pages": [27, 27], "category": "diet"},
+      {"title": "대사증후군, 비만과 고혈압", "pages": [28, 28], "category": "lifestyle"},
+      {"title": "비약물치료 및 생활요법 > 체중조절", "pages": [72, 73], "category": "lifestyle"},
+      {"title": "비약물치료 및 생활요법 > 소금 섭취 제한", "pages": [74, 75], "category": "diet"},
+      {"title": "비약물치료 및 생활요법 > 절주", "pages": [76, 76], "category": "lifestyle"},
+      {"title": "비약물치료 및 생활요법 > 운동", "pages": [77, 77], "category": "exercise"},
+      {"title": "비약물치료 및 생활요법 > 금연", "pages": [78, 78], "category": "lifestyle"},
+      {"title": "비약물치료 및 생활요법 > 건강한 식사요법", "pages": [79, 79], "category": "diet"},
+      {"title": "비약물치료 및 생활요법 > 마음요법", "pages": [80, 80], "category": "lifestyle"}
+    ]
+  },
+  {
+    "id": "kda-diabetes-2025",
+    "file": "kda_2025_full.pdf",
+    "title": "2025 당뇨병 진료지침 제9판",
+    "publisher": "대한당뇨병학회",
+    "year": 2025,
+    "url": "https://www.diabetes.or.kr/bbs/?code=guide",
+    "license_note": "학회 홈페이지 무료 공개. All rights reserved. PDF 1쪽 = 인쇄 2쪽(펼침면)",
+    "conditions": ["diabetes"],
+    "category": "lifestyle",
+    "sections": [
+      {"title": "2형당뇨병의 예방", "pages": [16, 21], "category": "lifestyle"},
+      {"title": "포괄적인 자기관리 > 의학영양요법", "pages": [50, 58], "category": "diet"},
+      {"title": "포괄적인 자기관리 > 운동요법", "pages": [59, 61], "category": "exercise"},
+      {"title": "동반 대사질환관리 > 비만 관리", "pages": [134, 139], "category": "lifestyle"}
+    ]
+  },
+  {
+    "id": "ksla-dyslipidemia-2026",
+    "file": "ksla_dyslipidemia_2026.pdf",
+    "title": "이상지질혈증 진료지침 2026",
+    "publisher": "한국지질·동맥경화학회",
+    "year": 2026,
+    "url": "https://www.lipid.or.kr/reference/guideline.php?boardid=guideline&mode=view&idx=1456",
+    "license_note": "학회 홈페이지 무료 공개. 상업적 사용 시 학회 사무국 문의 필요(게시물 명시)",
+    "conditions": ["dyslipidemia"],
+    "category": "lifestyle",
+    "sections": [
+      {"title": "권고 요약", "pages": [7, 9], "category": "lifestyle"},
+      {"title": "진단 방법 및 분류 기준", "pages": [35, 39], "category": "criteria"},
+      {"title": "위험도 평가", "pages": [40, 42], "category": "criteria"},
+      {"title": "생활요법 > 식사요법", "pages": [71, 85], "category": "diet"},
+      {"title": "생활요법 > 금연", "pages": [86, 87], "category": "lifestyle"},
+      {"title": "생활요법 > 음주 관리", "pages": [88, 98], "category": "lifestyle"},
+      {"title": "생활요법 > 운동요법", "pages": [99, 110], "category": "exercise"}
+    ]
+  },
+  {
+    "id": "kosso-obesity-factsheet-2024",
+    "file": "kosso_obesity_factsheet_2024.pdf",
+    "title": "2024 비만병 팩트시트",
+    "publisher": "대한비만학회",
+    "year": 2024,
+    "url": "https://general.kosso.or.kr/html/user/core/view/reaction/main/kosso/inc/data/2024_Obesity_Fact_sheet_web_kor1223.pdf",
+    "license_note": "학회 일반인 사이트 무료 공개. 이용조건 미기재",
+    "conditions": ["obesity", "metabolic_syndrome"],
+    "category": "criteria"
+  },
+  {
+    "id": "kscms-metabolic-syndrome-2021",
+    "file": "kscms_metabolic_syndrome_2021_summary.pdf",
+    "title": "대사증후군 진료지침 2021 요약본",
+    "publisher": "대한심장대사증후군학회",
+    "year": 2021,
+    "url": "https://www.kscms.org/Data",
+    "license_note": "학회 홈페이지 무료 공개. 이용조건 미기재",
+    "conditions": ["metabolic_syndrome"],
+    "category": "lifestyle"
+  },
+  {
+    "id": "kasl-nafld-2021",
+    "file": "kasl_nafld_2021.pdf",
+    "title": "2021 대한간학회 비알코올 지방간질환 진료 가이드라인",
+    "publisher": "대한간학회",
+    "year": 2021,
+    "url": "https://www.kasl.org/bbs/?number=4630&mode=view&code=guide",
+    "license_note": "학회 홈페이지 무료 공개. All rights reserved. 2025 MASLD판이 생활습관 교정은 이 판을 참조하도록 명시",
+    "conditions": ["fatty_liver"],
+    "category": "lifestyle",
+    "sections": [
+      {"title": "정의", "pages": [12, 13], "category": "criteria"},
+      {"title": "역학 > 위험인자와 동반질환", "pages": [17, 20], "category": "criteria"},
+      {"title": "치료 > 생활습관 교정 > 체중감량", "pages": [36, 36], "category": "lifestyle"},
+      {"title": "치료 > 생활습관 교정 > 식이요법", "pages": [37, 37], "category": "diet"},
+      {"title": "치료 > 생활습관 교정 > 운동요법", "pages": [38, 39], "category": "exercise"}
+    ]
+  },
+  {
+    "id": "kasl-masld-2025",
+    "file": "kasl_masld_2025.pdf",
+    "title": "2025 대한간학회 대사이상지방간질환 진료 가이드라인",
+    "publisher": "대한간학회",
+    "year": 2025,
+    "url": "https://www.kasl.org/bbs/?number=6193&mode=view&code=guide",
+    "license_note": "학회 홈페이지 무료 공개. 허락 없는 수정·변형·전재 금지(본문 명시)",
+    "conditions": ["fatty_liver"],
+    "category": "criteria",
+    "sections": [
+      {"title": "정의 및 진단 기준", "pages": [18, 22], "category": "criteria"},
+      {"title": "심혈관 질환 위험", "pages": [26, 30], "category": "criteria"}
+    ]
+  },
+  {
+    "id": "kwgs-sarcopenia-diagnosis-2023",
+    "file": "kwgs_sarcopenia_diagnosis_2023.pdf",
+    "title": "Korean Working Group on Sarcopenia Guideline: Expert Consensus on Sarcopenia Screening and Diagnosis",
+    "publisher": "대한근감소증학회·대한골대사학회·대한노인병학회 (KWGS)",
+    "year": 2023,
+    "url": "https://www.e-agmr.org/upload/pdf/agmr-23-0009.pdf",
+    "license_note": "Annals of Geriatric Medicine and Research 오픈액세스. 라이선스 원문 확인 필요",
+    "conditions": ["sarcopenia"],
+    "category": "criteria",
+    "sections": [
+      {"title": "Assessment flow, screening and diagnostic criteria", "pages": [4, 9], "category": "criteria"}
+    ]
+  },
+  {
+    "id": "kwgs-sarcopenia-exercise-2025",
+    "file": "kwgs_sarcopenia_exercise_2025.pdf",
+    "title": "Evidence-Based Exercise Guidelines for Sarcopenia in Older Adults",
+    "publisher": "Korean Working Group on Sarcopenia (KWGS)",
+    "year": 2025,
+    "url": "https://www.e-agmr.org/journal/view.php?doi=10.4235/agmr.25.0052",
+    "license_note": "CC BY-NC 4.0",
+    "conditions": ["sarcopenia"],
+    "category": "exercise",
+    "sections": [
+      {"title": "Results and FITT-based exercise recommendations", "pages": [4, 13], "category": "exercise"}
+    ]
+  },
+  {
+    "id": "kdri-2025-summary-table",
+    "file": "kdri_2025_summary_table.pdf",
+    "title": "2025 한국인 영양소 섭취기준 요약표",
+    "publisher": "보건복지부·한국영양학회",
+    "year": 2025,
+    "url": "https://www.kns.or.kr/FileRoom/FileRoom.asp?BoardID=Kdr",
+    "license_note": "이용조건 미기재(영문요약본은 공공누리 표기, 유형 미확인)",
+    "conditions": ["general"],
+    "category": "diet"
+  },
+  {
+    "id": "mohw-physical-activity-2023",
+    "file": "mohw_physical_activity_2023.pdf",
+    "title": "한국인을 위한 신체활동 지침서 개정판",
+    "publisher": "보건복지부·한국건강증진개발원",
+    "year": 2023,
+    "url": "https://www.mohw.go.kr/board.es?mid=a10411010100&bid=0019&act=view&list_no=1479208",
+    "license_note": "공공누리 표기, 유형 미확인. 장 제목이 이미지라 쪽 범위 미지정(전체 포함)",
+    "conditions": ["general"],
+    "category": "exercise"
+  }
+]
