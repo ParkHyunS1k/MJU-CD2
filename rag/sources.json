@@ -163,5 +163,65 @@
     "license_note": "공공누리 표기, 유형 미확인. 장 제목이 이미지라 쪽 범위 미지정(전체 포함)",
     "conditions": ["general"],
     "category": "exercise"
+  },
+  {
+    "id": "jomes-ksso-behavioral-consensus-2026",
+    "file": "jomes_ksso_behavioral_consensus_2026.pdf",
+    "title": "Consensus on Behavioral Strategies for Adults with Obesity from the Korean Society for the Study of Obesity",
+    "publisher": "대한비만학회 (J Obes Metab Syndr 2026;35(3):269-281)",
+    "year": 2026,
+    "url": "https://doi.org/10.7570/jomes25098",
+    "license_note": "CC BY-NC 4.0",
+    "conditions": ["obesity"],
+    "category": "lifestyle",
+    "sections": [{"title": "Behavioral strategies", "pages": [1, 10], "category": "lifestyle"}]
+  },
+  {
+    "id": "jomes-ksso-obesity-guideline-2024",
+    "file": "jomes_ksso_obesity_guideline_2024.pdf",
+    "title": "2024 Clinical Practice Guidelines for the Diagnosis and Pharmacologic Treatment of Overweight and Obesity by the Korean Society for the Study of Obesity",
+    "publisher": "대한비만학회 (J Obes Metab Syndr)",
+    "year": 2025,
+    "url": "https://doi.org/10.7570/jomes25042",
+    "license_note": "CC BY-NC 4.0",
+    "conditions": ["obesity"],
+    "category": "criteria",
+    "sections": [{"title": "Diagnosis and treatment of overweight and obesity", "pages": [1, 15], "category": "criteria"}]
+  },
+  {
+    "id": "jomes-obesity-factsheet-2024",
+    "file": "jomes_obesity_factsheet_2024.pdf",
+    "title": "2024 Obesity Fact Sheet in Korea: Prevalence of Obesity, Abdominal Obesity, Obesity Defined by Body Fat Percentage, and Underweight in Adults",
+    "publisher": "대한비만학회 (J Obes Metab Syndr)",
+    "year": 2025,
+    "url": "https://doi.org/10.7570/jomes25039",
+    "license_note": "CC BY-NC 4.0",
+    "conditions": ["obesity"],
+    "category": "criteria",
+    "sections": [{"title": "Obesity fact sheet 2024", "pages": [1, 7], "category": "criteria"}]
+  },
+  {
+    "id": "jomes-obesity-factsheet-2025",
+    "file": "jomes_obesity_factsheet_2025.pdf",
+    "title": "2025 Obesity Fact Sheet for Korea: Prevalence of Obesity, Abdominal Obesity from 2014 to 2023 and Prevalence of Chronic Disease by Obesity Status",
+    "publisher": "대한비만학회 (J Obes Metab Syndr)",
+    "year": 2026,
+    "url": "https://doi.org/10.7570/jomes25094",
+    "license_note": "CC BY-NC 4.0",
+    "conditions": ["obesity", "metabolic_syndrome"],
+    "category": "criteria",
+    "sections": [{"title": "Obesity fact sheet 2025", "pages": [1, 9], "category": "criteria"}]
+  },
+  {
+    "id": "jomes-severe-obesity-exercise-2024",
+    "file": "jomes_severe_obesity_exercise_2024.pdf",
+    "title": "Exercise Guidelines for Enhancing Mobility and Stability in Individuals with Severe Obesity",
+    "publisher": "대한비만학회 (J Obes Metab Syndr)",
+    "year": 2025,
+    "url": "https://doi.org/10.7570/jomes24047",
+    "license_note": "CC BY-NC 4.0",
+    "conditions": ["obesity"],
+    "category": "exercise",
+    "sections": [{"title": "Exercise guidelines for severe obesity", "pages": [1, 9], "category": "exercise"}]
   }
 ]
