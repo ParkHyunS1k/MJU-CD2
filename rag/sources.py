@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from app.services.rag_taxonomy import CONDITION_KEYS, Category
 
@@ -15,6 +15,22 @@ class SectionRule(BaseModel):
     category: Category
 
 
+class SectionSpec(BaseModel):
+    """책갈피가 없는 PDF에서 넣을 장. pages는 PDF 쪽 번호(1부터, 양끝 포함)."""
+
+    title: str = Field(min_length=1)
+    pages: tuple[int, int]
+    category: Category | None = None
+
+    @field_validator("pages")
+    @classmethod
+    def _valid_range(cls, value: tuple[int, int]) -> tuple[int, int]:
+        start, end = value
+        if start < 1 or end < start:
+            raise ValueError(f"invalid page range: {value}")
+        return value
+
+
 class SourceDoc(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$")
     file: str
@@ -26,6 +42,7 @@ class SourceDoc(BaseModel):
     conditions: list[str] = Field(min_length=1)
     category: Category
     section_rules: list[SectionRule] = []
+    sections: list[SectionSpec] = []
 
     @field_validator("conditions")
     @classmethod
@@ -34,6 +51,17 @@ class SourceDoc(BaseModel):
         if unknown:
             raise ValueError(f"unknown condition keys: {unknown}")
         return value
+
+    @model_validator(mode="after")
+    def _sections_consistent(self) -> "SourceDoc":
+        titles = [s.title for s in self.sections]
+        if len(titles) != len(set(titles)):
+            raise ValueError("duplicate section titles")
+        ranges = sorted(s.pages for s in self.sections)
+        for (_, prev_end), (next_start, _) in zip(ranges, ranges[1:]):
+            if next_start <= prev_end:
+                raise ValueError(f"overlapping section pages: {ranges}")
+        return self
 
 
 def load_sources(sources_path: Path, raw_dir: Path) -> list[tuple[SourceDoc, Path]]:

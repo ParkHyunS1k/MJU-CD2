@@ -69,3 +69,23 @@ def test_invalid_json_rejected(tmp_path):
     sources.write_text("[{", encoding="utf-8")
     with pytest.raises(SourcesError):
         load_sources(sources, raw)
+
+
+def test_sections_parsed(tmp_path):
+    sections = [{"title": "운동요법", "pages": [59, 64], "category": "exercise"}, {"title": "식사", "pages": [50, 58]}]
+    sources, raw = _write(tmp_path, [_entry(sections=sections)])
+    [(doc, _)] = load_sources(sources, raw)
+    assert doc.sections[0].pages == (59, 64)
+    assert doc.sections[1].category is None
+
+
+@pytest.mark.parametrize("sections", [
+    [{"title": "a", "pages": [5, 3]}],
+    [{"title": "a", "pages": [0, 3]}],
+    [{"title": "a", "pages": [1, 5]}, {"title": "b", "pages": [5, 8]}],
+    [{"title": "a", "pages": [1, 2]}, {"title": "a", "pages": [3, 4]}],
+])
+def test_invalid_sections_rejected(tmp_path, sections):
+    sources, raw = _write(tmp_path, [_entry(sections=sections)])
+    with pytest.raises(SourcesError):
+        load_sources(sources, raw)

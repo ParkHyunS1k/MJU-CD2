@@ -6,7 +6,7 @@ from rag.sections import Section
 
 
 def _section(*texts_with_pages, path=("1. 생활요법",)):
-    blocks = [Block(page, 100 + i, 110 + i, text) for i, (page, text) in enumerate(texts_with_pages)]
+    blocks = [Block(page, 100 + i, 110 + i, text, x0=72, x1=300) for i, (page, text) in enumerate(texts_with_pages)]
     return Section(list(path), blocks)
 
 

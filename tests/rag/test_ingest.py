@@ -102,3 +102,22 @@ def test_ingest_skips_pdf_with_only_page_numbers(tmp_path, make_pdf):
     assert records == []
     assert stats["skipped_no_text"] == ["scan2"]
     assert stats["documents"] == 0
+
+
+def test_ingest_uses_section_spec_and_ignores_other_pages(tmp_path, make_pdf):
+    make_pdf("dm.pdf", [
+        [(100, "표지 문구")],
+        [(100, "주 150분 이상 운동한다.")],
+        [(100, "근력운동을 병행한다.")],
+        [(100, "약물치료 내용")],
+    ])
+    sources = _sources(tmp_path, [_entry(
+        "dm", "dm.pdf", conditions=["diabetes"],
+        sections=[{"title": "운동요법", "pages": [2, 3], "category": "exercise"}],
+    )])
+    records, stats = ingest(sources, tmp_path)
+    assert [(r["heading_path"], r["category"], r["page_start"], r["page_end"]) for r in records] == [
+        ("운동요법", "exercise", 2, 3),
+    ]
+    assert "약물치료" not in records[0]["content"]
+    assert stats["no_toc"] == []

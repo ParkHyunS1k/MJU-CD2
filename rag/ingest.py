@@ -10,7 +10,7 @@ from rag.chunk import chunk_section
 from rag.clean import clean_blocks
 from rag.parse import parse_pdf
 from rag.records import build_records, dedupe
-from rag.sections import build_sections
+from rag.sections import build_sections, sections_from_spec
 from rag.sources import SourcesError, load_sources
 
 log = logging.getLogger("rag.ingest")
@@ -31,19 +31,23 @@ def ingest(
             log.exception("[%s] failed to parse %s", source.id, path)
             stats["failed"].append(source.id)
             continue
-        blocks = clean_blocks(parsed.blocks, parsed.page_heights)
+        blocks = clean_blocks(parsed.blocks, parsed.page_heights, parsed.page_widths)
         if not blocks:
             log.warning("[%s] no text layer (scanned PDF?); skipped", source.id)
             stats["skipped_no_text"].append(source.id)
             continue
-        if not parsed.toc:
-            stats["no_toc"].append(source.id)
+        if source.sections:
+            sections = sections_from_spec(blocks, source.sections)
+            found = {section.heading_path[0] for section in sections}
+            for spec in source.sections:
+                if spec.title not in found:
+                    log.warning("[%s] section %r pages %s has no text", source.id, spec.title, spec.pages)
+        else:
+            if not parsed.toc:
+                stats["no_toc"].append(source.id)
+            sections = build_sections(blocks, parsed.toc)
 
-        chunks = [
-            chunk
-            for section in build_sections(blocks, parsed.toc)
-            for chunk in chunk_section(section, max_chars, overlap)
-        ]
+        chunks = [chunk for section in sections for chunk in chunk_section(section, max_chars, overlap)]
         records.extend(build_records(source, chunks))
         stats["documents"] += 1
 

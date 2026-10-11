@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from rag.parse import Block, TocEntry
+from rag.sources import SectionSpec
 
 _REFERENCES = re.compile(r"^(참고문헌|references|bibliography)$", re.IGNORECASE)
 
@@ -64,4 +65,15 @@ def build_sections(blocks: list[Block], toc: list[TocEntry]) -> list[Section]:
         body = blocks[index + 1 if skip_heading else index : end]
         if body and not any(_is_references(title) for title in heading_path):
             sections.append(Section(heading_path, body))
+    return sections
+
+
+def sections_from_spec(blocks: list[Block], specs: list[SectionSpec]) -> list[Section]:
+    """sources.json에 적은 쪽 범위만 섹션으로 만든다. 범위 밖 쪽은 버린다."""
+    sections = []
+    for spec in specs:
+        start, end = spec.pages
+        body = [block for block in blocks if start <= block.page <= end]
+        if body:
+            sections.append(Section([spec.title], body))
     return sections

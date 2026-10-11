@@ -6,6 +6,9 @@ from rag.sources import SourceDoc
 
 
 def _category(source: SourceDoc, heading_path: list[str]) -> str:
+    for spec in source.sections:
+        if spec.category and heading_path == [spec.title]:
+            return spec.category
     joined = " > ".join(heading_path)
     for rule in source.section_rules:
         if rule.match in joined:

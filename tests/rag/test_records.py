@@ -2,7 +2,7 @@ import hashlib
 
 from rag.chunk import Chunk
 from rag.records import build_records, dedupe
-from rag.sources import SourceDoc
+from rag.sources import SectionSpec, SourceDoc
 
 SOURCE = SourceDoc(
     id="kshguide-2022",
@@ -57,3 +57,9 @@ def test_dedupe_keeps_first():
     chunks = [Chunk([], 1, 1, "같은 본문"), Chunk([], 5, 5, "같은 본문"), Chunk([], 6, 6, "다른 본문")]
     records = dedupe(build_records(SOURCE, chunks))
     assert [r["page_start"] for r in records] == [1, 6]
+
+
+def test_section_spec_category_wins():
+    source = SOURCE.model_copy(update={"sections": [SectionSpec(title="5-4 운동과 식이", pages=(1, 2), category="exercise")]})
+    [record] = build_records(source, [Chunk(["5-4 운동과 식이"], 1, 1, "본문")])
+    assert record["category"] == "exercise"

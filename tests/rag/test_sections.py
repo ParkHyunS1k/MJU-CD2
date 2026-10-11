@@ -1,9 +1,10 @@
 from rag.parse import Block, TocEntry
-from rag.sections import Section, build_sections
+from rag.sections import Section, build_sections, sections_from_spec
+from rag.sources import SectionSpec
 
 
 def _b(page, y, text):
-    return Block(page, y, y + 12, text)
+    return Block(page, y, y + 12, text, x0=72, x1=300)
 
 
 BLOCKS = [
@@ -71,3 +72,21 @@ def test_unmatched_entry_on_same_page_does_not_steal_previous_section():
     assert [(s.heading_path, [b.text for b in s.blocks]) for s in sections] == [
         (["2.1 나트륨"], ["나트륨 본문", "2.2. 칼륨 섭취", "칼륨 본문"]),
     ]
+
+
+def test_sections_from_spec_keeps_only_listed_pages():
+    blocks = [_b(1, 100, "표지"), _b(2, 100, "운동 본문1"), _b(3, 100, "운동 본문2"), _b(4, 100, "약물치료"), _b(5, 100, "식사 본문")]
+    specs = [
+        SectionSpec(title="운동요법", pages=(2, 3), category="exercise"),
+        SectionSpec(title="의학영양요법", pages=(5, 5), category="diet"),
+    ]
+    sections = sections_from_spec(blocks, specs)
+    assert [(s.heading_path, [b.text for b in s.blocks]) for s in sections] == [
+        (["운동요법"], ["운동 본문1", "운동 본문2"]),
+        (["의학영양요법"], ["식사 본문"]),
+    ]
+
+
+def test_sections_from_spec_skips_ranges_without_text():
+    specs = [SectionSpec(title="없는 장", pages=(9, 10))]
+    assert sections_from_spec([_b(1, 100, "본문")], specs) == []
