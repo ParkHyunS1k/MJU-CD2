@@ -5,10 +5,11 @@ import json
 import sys
 from pathlib import Path
 
-from rag.eval.metrics import compact
+from rag.eval.metrics import compact, evidence_coverage
 
 _QUERY_FIELDS = ("query_id", "text", "form", "condition", "category", "split")
 _MIN_EVIDENCE_CHARS = 10  # 10-gram 매칭 단위보다 짧은 조각은 아무 청크에나 걸린다
+_MAX_MATCHING_CHUNKS = 3  # 이보다 많은 청크에 걸리는 근거는 "[전문가의견, 일반적권고]" 같은 상투 문구다
 
 
 def _spans(fragments: list[str], content: str) -> list[str]:
@@ -27,11 +28,16 @@ def _spans(fragments: list[str], content: str) -> list[str]:
     return [r for r in runs if len(compact(r)) >= _MIN_EVIDENCE_CHARS]
 
 
-def export(items: dict, decisions: list[dict], query_edits: list[dict]) -> tuple[list[dict], list[dict], dict]:
+def _nonspecific(evidence: str, corpus: list[str]) -> bool:
+    return sum(evidence_coverage(evidence, text) >= 0.5 for text in corpus) > _MAX_MATCHING_CHUNKS
+
+
+def export(items: dict, decisions: list[dict], query_edits: list[dict],
+           corpus: list[str] = ()) -> tuple[list[dict], list[dict], dict]:
     candidates = {(q["query_id"], c["content_hash"]): c for q in items["queries"] for c in q["candidates"]}
     edits = {e["query_id"]: e for e in query_edits}
     stats = {"candidates": len(candidates), "reviewed": 0, "llm_filled": 0, "relevant": 0,
-             "relevant_without_evidence": 0, "unknown_decisions": 0}
+             "relevant_without_evidence": 0, "nonspecific_dropped": 0, "unknown_decisions": 0}
 
     decided = []
     for d in decisions:
@@ -54,7 +60,11 @@ def export(items: dict, decisions: list[dict], query_edits: list[dict]) -> tuple
         if not d["relevant"]:
             continue
         stats["relevant"] += 1
-        evidence = _spans(d["evidence"], candidate["content"])
+        # 화면이 줄 단위로 쪼갠 사람 근거만 합친다. LLM 근거는 이미 문장 단위다.
+        spans = _spans(d["evidence"], candidate["content"]) if d["source"] == "human" else [
+            e for e in d["evidence"] if len(compact(e)) >= _MIN_EVIDENCE_CHARS]
+        evidence = [e for e in spans if not _nonspecific(e, corpus)]
+        stats["nonspecific_dropped"] += len(spans) - len(evidence)
         if not evidence:
             stats["relevant_without_evidence"] += 1
             continue
@@ -97,13 +107,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="검수 결과 → 근거 문장 라벨")
     parser.add_argument("--items", type=Path, default=Path("rag/eval/data/review_items.json"))
     parser.add_argument("--decisions", type=Path, default=Path("rag/eval/data/review_decisions.json"))
+    parser.add_argument("--chunks", type=Path, default=Path("rag/data/chunks.jsonl"))
     parser.add_argument("--labels-out", type=Path, default=Path("rag/eval/data/labels.jsonl"))
     parser.add_argument("--queries-out", type=Path, default=Path("rag/eval/data/queries.jsonl"))
     args = parser.parse_args(argv)
 
     items = json.loads(args.items.read_text(encoding="utf-8"))
     review = json.loads(args.decisions.read_text(encoding="utf-8"))
-    labels, queries, stats = export(items, review["decisions"], review["queries"])
+    corpus = [json.loads(line)["content"] for line in args.chunks.read_text(encoding="utf-8").splitlines()]
+    labels, queries, stats = export(items, review["decisions"], review["queries"], corpus)
     _write_jsonl(args.labels_out, labels)
     _write_jsonl(args.queries_out, queries)
     print(json.dumps(stats, ensure_ascii=False, indent=2))

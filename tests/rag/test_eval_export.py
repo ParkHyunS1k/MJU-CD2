@@ -76,5 +76,23 @@ def test_unreviewed_candidates_fall_back_to_llm_judgment():
     items = _items_with(CONTENT, True, ["속보, 조깅은 혈압을 낮추는\n효과가 있다.", "주 5일 운동한다."])
     labels, _, stats = export(items, [], [])
     assert [(l["evidence"], l["source"]) for l in labels] == [
-        ("속보, 조깅은 혈압을 낮추는\n효과가 있다. 주 5일 운동한다.", "llm")]
+        ("속보, 조깅은 혈압을 낮추는\n효과가 있다.", "llm")]
     assert stats["reviewed"] == 0 and stats["llm_filled"] == 1 and stats["unreviewed"] == 1
+
+
+def test_llm_sentences_stay_separate_spans():
+    items = _items_with(CONTENT, True, ["속보, 조깅은 혈압을 낮추는\n효과가 있다.", "주 5일 운동한다는 문장이다."])
+    items["queries"][0]["candidates"][0]["content"] = CONTENT.replace("주 5일 운동한다.", "주 5일 운동한다는 문장이다.")
+    labels, _, _ = export(items, [], [])
+    assert [l["evidence"] for l in labels] == ["속보, 조깅은 혈압을 낮추는\n효과가 있다.", "주 5일 운동한다는 문장이다."]
+
+
+def test_evidence_matching_many_chunks_is_dropped():
+    tag = "[무작위대조군연구, 일반적권고]"
+    items = _items_with(CONTENT + tag)
+    decision = {"query_id": "q1", "content_hash": "h1", "relevant": True,
+                "evidence": ["속보, 조깅은 혈압을 낮추는 효과가 있다.", tag]}
+    corpus = [CONTENT] + [f"권고 {i} {tag}" for i in range(4)]
+    labels, _, stats = export(items, [decision], [], corpus)
+    assert [l["evidence"] for l in labels] == ["속보, 조깅은 혈압을 낮추는 효과가 있다."]
+    assert stats["nonspecific_dropped"] == 1
