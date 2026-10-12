@@ -20,3 +20,8 @@ training/output/
 # RAG 원본 문서(재배포 불가)와 수집 산출물
 rag/raw/
 rag/data/
+
+# RAG 평가: 지침 원문이 들어가는 중간 산출물과 캐시
+rag/eval/cache/
+rag/eval/data/review_items.json
+rag/eval/data/review_decisions.json
