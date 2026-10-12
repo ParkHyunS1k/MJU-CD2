@@ -296,7 +296,8 @@ BMI + 체지방률을 채택했다. 성능이 4개 조합과 같고, 두 값 모
 - 성별을 빼고 |기여|가 큰 순서로 3개를 반환한다. `direction`은 기여가 양수면 "up"이다.
 
 **불러오기**
-- 처음 호출할 때 pkl 4개를 불러와 캐시한다.
+- 처음 호출할 때 `models/{disease_key}.pkl`을 불러와 캐시한다. 다른 이름의 파일(예: 기존 `hypertension_male.pkl`)은 무시한다.
+- 파일이 없는 질환은 경고 로그를 남기고 건너뛴다. 5.4를 통과하지 못해 배포하지 않은 질환이 이 경우다.
 - `version != 2`이거나 `features`가 코드의 기대 목록과 다르면 즉시 예외를 던진다.
 
 **삭제**
@@ -323,7 +324,7 @@ BMI + 체지방률을 채택했다. 성능이 4개 조합과 같고, 두 값 모
 ## 8. 배포 순서
 
 1. `python training/train.py` → `python training/evaluate.py` → 5.4 통과 여부를 확인한다.
-2. 통과한 질환의 pkl과 평가 보고서를 커밋하고, 기존 pkl 7개와 `retrain_final.py`를 삭제한다.
+2. 통과한 질환만 `python -m training.train --only ...`으로 저장한다. 그 pkl과 평가 보고서를 커밋하고, 기존 pkl 7개와 `retrain_final.py`를 삭제한다. 통과하지 못한 질환은 `models/`에 파일이 남지 않게 한다.
 3. `prediction_service`를 교체하고 테스트를 통과시킨다.
 4. `back` 브랜치에 push한다 → Railway에 배포된다.
 
