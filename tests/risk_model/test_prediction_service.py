@@ -155,3 +155,30 @@ def test_real_models_if_present():
     ps._load_bundle.cache_clear()
     res = ps.predict_all(INBODY, {**PROFILE, "fh_hypertension": True})
     assert len(res) == len(present)
+
+
+FH_LABELS = {"고혈압 가족력", "당뇨 가족력", "고지혈증 가족력"}
+OWN_FH = {"고혈압": "고혈압 가족력", "당뇨": "당뇨 가족력",
+          "고콜레스테롤": "고지혈증 가족력", "고중성지방": "고지혈증 가족력"}
+
+
+def test_unanswered_family_history_not_in_factors(models_dir):
+    """가족력을 받지 않은 사용자에게 가족력을 위험 요인으로 보여주지 않는다."""
+    for r in ps.predict_all(INBODY, PROFILE):
+        assert not {f["feature_kor"] for f in r["top_factors"]} & FH_LABELS
+
+
+def test_only_own_disease_family_history_in_factors(knhanes_like, tmp_path, monkeypatch):
+    """질환별로 자기 질환의 가족력만 요인으로 보여준다(다른 질환 가족력은 계수 방향이 상식과 어긋날 수 있다)."""
+    _write_bundles(knhanes_like, tmp_path)
+    for p in tmp_path.glob("*.pkl"):  # 가족력 계수를 키워 상위 3개에 들게 만든다
+        b = joblib.load(p)
+        b["model"][-1].coef_[0][4:] = [3.0, -3.0, 3.0]
+        joblib.dump(b, p)
+    monkeypatch.setattr(ps, "MODELS_DIR", tmp_path)
+    ps._load_bundle.cache_clear()
+    profile = {**PROFILE, "fh_hypertension": True, "fh_diabetes": True, "fh_dyslipidemia": True}
+    for r in ps.predict_all(INBODY, profile):
+        shown = {f["feature_kor"] for f in r["top_factors"]} & FH_LABELS
+        assert shown == {OWN_FH[r["disease"]]}
+    ps._load_bundle.cache_clear()

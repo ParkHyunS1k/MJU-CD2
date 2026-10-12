@@ -18,6 +18,9 @@ DISEASES = ["hypertension", "cholesterol", "diabetes", "triglyceride"]
 FEATURES = ["age", "female", "bmi", "body_fat_percentage",
             "fh_hypertension", "fh_diabetes", "fh_dyslipidemia"]
 FAMILY_HISTORY = FEATURES[4:]
+# 요인 목록에는 자기 질환의 가족력만 보여준다. 다른 질환 가족력은 계수 방향이 상식과 어긋날 수 있다.
+OWN_FAMILY_HISTORY = {"hypertension": "fh_hypertension", "diabetes": "fh_diabetes",
+                      "cholesterol": "fh_dyslipidemia", "triglyceride": "fh_dyslipidemia"}
 MIN_AGE = 19
 TOP_K = 3
 # KNHANES 19–59세 실제 범위(BMI 14.5–48.0, 체지방률 6.7–54.6)에 여유를 둔 값. 벗어나면 OCR 오독으로 본다.
@@ -102,13 +105,19 @@ def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
     if x is None:
         return []
 
+    answered = {k for k in FAMILY_HISTORY if user_profile.get(k) is not None}
     results = []
     for bundle in load_models():
         prob = float(bundle["model"].predict_proba(x)[0, 1])
+        # 성별, 받지 않은 가족력, 다른 질환의 가족력은 설명에서 뺀다(예측에는 쓴다)
+        shown = {f for f in FEATURES if f != "female" and f not in FAMILY_HISTORY}
+        own = OWN_FAMILY_HISTORY[bundle["disease_key"]]
+        if own in answered:
+            shown.add(own)
         factors = [
             {"feature_kor": bundle["feat_kor"][f], "value": float(x[0, FEATURES.index(f)]),
              "shap_value": c, "direction": "up" if c > 0 else "down"}
-            for f, c in _contributions(bundle, x).items() if f != "female"
+            for f, c in _contributions(bundle, x).items() if f in shown
         ]
         factors.sort(key=lambda d: abs(d["shap_value"]), reverse=True)
         results.append({"disease": bundle["target"], "probability": prob,
