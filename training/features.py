@@ -41,8 +41,9 @@ def build_labels(df: pd.DataFrame) -> dict[str, pd.Series]:
 
 
 def _any_family(df: pd.DataFrame, prefix: str) -> pd.Series:
-    """부·모·형제 중 한 명이라도 1이면 1. 모름(9)·비해당(8)은 0."""
-    return df[[f"{prefix}{i}" for i in (1, 2, 3)]].eq(1).any(axis=1).astype(float)
+    """부·모·형제 중 한 명이라도 1이면 1. 모름(9)·비해당(8)은 0. 세 문항이 모두 비어 있으면 결측."""
+    cols = df[[f"{prefix}{i}" for i in (1, 2, 3)]]
+    return cols.eq(1).any(axis=1).astype(float).where(cols.notna().any(axis=1))
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:

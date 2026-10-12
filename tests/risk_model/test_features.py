@@ -81,3 +81,18 @@ def test_choose_thresholds_youden_and_negative_quantile():
 def test_choose_thresholds_rejects_inverted():
     with pytest.raises(ValueError):
         choose_thresholds(np.array([0.0, 0.0, 1.0, 1.0]), np.array([0.1, 0.9, 0.2, 0.95]))
+
+
+def test_family_history_all_missing_is_nan_and_excluded(knhanes_like):
+    """가족력 문항 3개가 모두 비어 있으면 '없음'(0)이 아니라 결측이다. 학습에서 빠진다."""
+    df = knhanes_like.copy()
+    df.loc[0, ["HE_HPfh1", "HE_HPfh2", "HE_HPfh3"]] = np.nan            # 전부 결측 → NaN
+    df.loc[1, ["HE_DMfh1", "HE_DMfh2"]] = np.nan                         # 일부만 결측 → 남은 응답으로 판단
+    df.loc[1, "HE_DMfh3"] = 0
+    df.loc[2, ["HE_HLfh1", "HE_HLfh2"]] = np.nan
+    df.loc[2, "HE_HLfh3"] = 1
+    X = build_features(df)
+    assert np.isnan(X.loc[0, "fh_hypertension"])
+    assert X.loc[1, "fh_diabetes"] == 0.0 and X.loc[2, "fh_dyslipidemia"] == 1.0
+    Xt, _, _ = training_rows(df, "diabetes")
+    assert 0 not in Xt.index
