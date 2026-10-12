@@ -1,6 +1,8 @@
 """쿼리 하나의 후보 전체를 Gemini로 한 번에 판정한다(무료 한도 안에서 쿼리당 1회 호출)."""
 
 import json
+import subprocess
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -72,3 +74,32 @@ def gemini_ask() -> Callable[[str], QueryJudgment]:
 
     client = get_client()
     return lambda prompt: generate_json(client, prompt, QueryJudgment)
+
+
+_CODEX_SCHEMA = {
+    "type": "object",
+    "properties": {"judgments": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"candidate_id": {"type": "string"}, "relevant": {"type": "boolean"},
+                       "evidence": {"type": "array", "items": {"type": "string"}}},
+        "required": ["candidate_id", "relevant", "evidence"],
+        "additionalProperties": False,
+    }}},
+    "required": ["judgments"],
+    "additionalProperties": False,
+}
+
+
+def codex_ask(run=subprocess.run) -> Callable[[str], QueryJudgment]:
+    """ChatGPT 로그인된 Codex CLI로 판정한다(Gemini 무료 한도 대안). 읽기 전용 샌드박스, 세션 저장 안 함."""
+
+    def ask(prompt: str) -> QueryJudgment:
+        with tempfile.TemporaryDirectory() as tmp:
+            schema, out = Path(tmp) / "schema.json", Path(tmp) / "out.json"
+            schema.write_text(json.dumps(_CODEX_SCHEMA))
+            cmd = ["codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral",
+                   "-C", tmp, "--output-schema", str(schema), "-o", str(out), "-"]
+            run(cmd, input=prompt, text=True, capture_output=True, timeout=900, check=True)
+            return QueryJudgment.model_validate_json(out.read_text())
+
+    return ask

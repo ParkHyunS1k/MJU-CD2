@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from rag.eval.embedders import Embedder, load
-from rag.eval.judge import JudgeCache, gemini_ask, judge_query
+from rag.eval.judge import JudgeCache, codex_ask, gemini_ask, judge_query
 from rag.eval.pool import pool_query
 from rag.eval.search import BM25Index, dense_rank
 
@@ -60,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--systems", default="gemini-1536,bge-m3,kure-v1,qwen3-0.6b,e5-large-instruct,bm25")
     parser.add_argument("--per-system", type=int, default=5)
     parser.add_argument("--judge-cache", type=Path, default=Path("rag/eval/cache/judgments.jsonl"))
+    parser.add_argument("--judge", choices=["gemini", "codex"], default="gemini")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -69,7 +70,8 @@ def main(argv: list[str] | None = None) -> int:
     embedders = {n: load(n) for n in names if n != "bm25"}
     bm25 = BM25Index(doc_texts) if "bm25" in names else None
     rankings = rank_all(embedders, doc_texts, [q["text"] for q in queries], args.per_system, bm25)
-    items = build_review_items(chunks, queries, rankings, args.per_system, gemini_ask(), JudgeCache(args.judge_cache))
+    items = build_review_items(chunks, queries, rankings, args.per_system, codex_ask() if args.judge == "codex" else gemini_ask(),
+                               JudgeCache(args.judge_cache))
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")

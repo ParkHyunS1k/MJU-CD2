@@ -58,3 +58,27 @@ def test_eval_judge_cache_resumes(tmp_path):
     cache.put("q1", {"h1": {"relevant": False, "evidence": []}})
     reopened = JudgeCache(tmp_path / "judgments.jsonl")
     assert reopened.get("q1") == {"h1": {"relevant": False, "evidence": []}}
+
+
+def test_codex_ask_runs_read_only_exec_and_parses_output():
+    import json
+    from pathlib import Path
+
+    from rag.eval.judge import codex_ask
+
+    seen = {}
+
+    def fake_run(cmd, input, text, capture_output, timeout, check):
+        seen["cmd"], seen["input"] = cmd, input
+        out = Path(cmd[cmd.index("-o") + 1])
+        schema = json.loads(Path(cmd[cmd.index("--output-schema") + 1]).read_text())
+        seen["schema_required"] = schema["required"]
+        out.write_text(json.dumps({"judgments": [{"candidate_id": "c1", "relevant": True, "evidence": ["x"]}]}))
+
+    result = codex_ask(run=fake_run)("판정 프롬프트")
+    assert result == QueryJudgment(judgments=[CandidateJudgment(candidate_id="c1", relevant=True, evidence=["x"])])
+    assert seen["cmd"][:2] == ["codex", "exec"]
+    assert seen["cmd"][seen["cmd"].index("--sandbox") + 1] == "read-only"
+    assert seen["cmd"][-1] == "-"
+    assert seen["input"] == "판정 프롬프트"
+    assert seen["schema_required"] == ["judgments"]
