@@ -39,7 +39,8 @@ def calibration_slope_intercept(y, p) -> tuple[float, float]:
     """logit(p)에 대한 무규제 로지스틱 회귀. 기울기 1, 절편 0이 이상적이다."""
     p = np.clip(p, 1e-6, 1 - 1e-6)
     lp = np.log(p / (1 - p)).reshape(-1, 1)
-    m = LogisticRegression(C=1e10, max_iter=1000)  # 사실상 무규제(sklearn 1.8은 penalty=None·C=inf 모두 경고).fit(lp, y)
+    # 사실상 무규제. sklearn 1.8은 penalty=None과 C=inf 모두 경고를 낸다.
+    m = LogisticRegression(C=1e10, max_iter=1000).fit(lp, y)
     return float(m.coef_[0][0]), float(m.intercept_[0])
 
 
