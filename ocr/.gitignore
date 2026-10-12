@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+.pytest_cache/
+# 비밀값
+.env
+.env.*
+!.env.example
+# 샘플 결과지 이미지·정답·예측은 비공개 드라이브에만 둔다
+samples/
+data/
+eval/out/
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.webp
+labels*.jsonl
+tests/vectors_local/

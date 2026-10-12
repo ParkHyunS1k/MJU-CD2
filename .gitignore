@@ -12,3 +12,10 @@ venv/
 # 로컬 도구 설정
 .omc/
 .omx/
+
+# 인바디 결과지 이미지 (개인 건강정보, Git 금지)
+*.png
+*.jpg
+*.jpeg
+*.heic
+*.webp
