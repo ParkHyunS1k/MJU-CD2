@@ -15,6 +15,7 @@ KNHANES_COLS = [
     "ID", "age", "sex", "HE_wt", "HE_ht", "HE_BMI", "HE_wc", "BIA_ex",
     "BIA_PBF", "BIA_BFM", "BIA_FFM", "BIA_TBW", "BIA_LRA", "BIA_LLA", "BIA_LRL", "BIA_LLL", "BIA_WBPA50",
     "HE_sbp", "HE_dbp", "HE_HP", "HE_glu", "HE_HbA1c", "HE_DM_HbA1c", "HE_chol", "HE_TG", "HE_HCHOL", "HE_HTG",
+    "HE_HPfh1", "HE_HPfh2", "HE_HPfh3", "HE_DMfh1", "HE_DMfh2", "HE_DMfh3", "HE_HLfh1", "HE_HLfh2", "HE_HLfh3",
 ]
 
 

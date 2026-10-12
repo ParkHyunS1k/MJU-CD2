@@ -8,3 +8,4 @@ joblib==1.5.2
 xgboost==3.2.0
 lightgbm==4.6.0
 pyreadr==0.5.7  # analysis/nhanes_check.py (.rda 읽기)
+matplotlib==3.10.6  # evaluate.py 보정 곡선
