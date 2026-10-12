@@ -1,0 +1,54 @@
+{"query_id": "hypertension-criteria-keyword", "text": "고혈압 진단 기준 분류", "form": "keyword", "condition": "hypertension", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "hypertension-criteria-question", "text": "혈압이 높은 편인데, 고혈압 진단 기준이 어떻게 되나요?", "form": "question", "condition": "hypertension", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "hypertension-diet-keyword", "text": "고혈압 예방 식이요법 식사 관리", "form": "keyword", "condition": "hypertension", "category": "diet", "split": "test", "excluded": false}
+{"query_id": "hypertension-diet-question", "text": "혈압이 높은데 어떤 음식을 피해야 할까요?", "form": "question", "condition": "hypertension", "category": "diet", "split": "test", "excluded": false}
+{"query_id": "hypertension-lifestyle-keyword", "text": "고혈압 생활습관 교정 체중 감량 금연 절주", "form": "keyword", "condition": "hypertension", "category": "lifestyle", "split": "tune", "excluded": false}
+{"query_id": "hypertension-lifestyle-question", "text": "혈압을 낮추려면 술, 담배, 체중 관리는 어떻게 해야 하나요?", "form": "question", "condition": "hypertension", "category": "lifestyle", "split": "tune", "excluded": false}
+{"query_id": "hypertension-exercise-keyword", "text": "고혈압 운동요법 유산소 근력운동 권고", "form": "keyword", "condition": "hypertension", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "hypertension-exercise-question", "text": "혈압이 높은데 어떤 운동을 해야 할까요?", "form": "question", "condition": "hypertension", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "diabetes-diet-keyword", "text": "당뇨병 예방 식이요법 식사 관리", "form": "keyword", "condition": "diabetes", "category": "diet", "split": "tune", "excluded": false}
+{"query_id": "diabetes-diet-question", "text": "혈당 관리를 위해 어떤 음식을 먹어야 할까요?", "form": "question", "condition": "diabetes", "category": "diet", "split": "tune", "excluded": false}
+{"query_id": "diabetes-exercise-keyword", "text": "당뇨병 운동요법 유산소 근력운동 권고", "form": "keyword", "condition": "diabetes", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "diabetes-exercise-question", "text": "혈당이 높은데 어떤 운동을 해야 할까요?", "form": "question", "condition": "diabetes", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "diabetes-lifestyle-keyword", "text": "당뇨병 생활습관 교정 체중 감량 금연 절주", "form": "keyword", "condition": "diabetes", "category": "lifestyle", "split": "tune", "excluded": false}
+{"query_id": "diabetes-lifestyle-question", "text": "당뇨를 예방하려면 생활습관을 어떻게 바꿔야 하나요?", "form": "question", "condition": "diabetes", "category": "lifestyle", "split": "tune", "excluded": false}
+{"query_id": "dyslipidemia-criteria-keyword", "text": "이상지질혈증 진단 기준 분류", "form": "keyword", "condition": "dyslipidemia", "category": "criteria", "split": "test", "excluded": false}
+{"query_id": "dyslipidemia-criteria-question", "text": "이상지질혈증 진단 기준이 뭔가요?", "form": "question", "condition": "dyslipidemia", "category": "criteria", "split": "test", "excluded": false}
+{"query_id": "dyslipidemia-diet-keyword", "text": "이상지질혈증 예방 식이요법 식사 관리", "form": "keyword", "condition": "dyslipidemia", "category": "diet", "split": "tune", "excluded": false}
+{"query_id": "dyslipidemia-diet-question", "text": "콜레스테롤 수치 높은데 어떤 음식을 피해야 하나요?", "form": "question", "condition": "dyslipidemia", "category": "diet", "split": "tune", "excluded": false}
+{"query_id": "dyslipidemia-lifestyle-keyword", "text": "이상지질혈증 생활습관 교정 체중 감량 금연 절주", "form": "keyword", "condition": "dyslipidemia", "category": "lifestyle", "split": "test", "excluded": false}
+{"query_id": "dyslipidemia-lifestyle-question", "text": "이상지질혈증 개선하려면 뭘 해야 하나요?", "form": "question", "condition": "dyslipidemia", "category": "lifestyle", "split": "test", "excluded": false}
+{"query_id": "dyslipidemia-exercise-keyword", "text": "이상지질혈증 운동요법 유산소 근력운동 권고", "form": "keyword", "condition": "dyslipidemia", "category": "exercise", "split": "tune", "excluded": false}
+{"query_id": "dyslipidemia-exercise-question", "text": "이상지질혈증 개선하려면 어떤 운동이 좋을까요?", "form": "question", "condition": "dyslipidemia", "category": "exercise", "split": "tune", "excluded": false}
+{"query_id": "obesity-criteria-keyword", "text": "비만 진단 기준 분류", "form": "keyword", "condition": "obesity", "category": "criteria", "split": "test", "excluded": false}
+{"query_id": "obesity-criteria-question", "text": "인바디 결과지 보니까 비만이라는데, 어떤 기준으로 비만인 건가요?", "form": "question", "condition": "obesity", "category": "criteria", "split": "test", "excluded": false}
+{"query_id": "obesity-lifestyle-keyword", "text": "비만 생활습관 교정 체중 감량 금연 절주", "form": "keyword", "condition": "obesity", "category": "lifestyle", "split": "tune", "excluded": false}
+{"query_id": "obesity-lifestyle-question", "text": "살 빼려면 식단이랑 운동 어떻게 해야 하나요?", "form": "question", "condition": "obesity", "category": "lifestyle", "split": "tune", "excluded": false}
+{"query_id": "obesity-exercise-keyword", "text": "비만 운동요법 유산소 근력운동 권고", "form": "keyword", "condition": "obesity", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "obesity-exercise-question", "text": "체지방 줄이려면 어떤 운동이 좋을까요?", "form": "question", "condition": "obesity", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "metabolic_syndrome-criteria-keyword", "text": "대사증후군 진단 기준 분류", "form": "keyword", "condition": "metabolic_syndrome", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "metabolic_syndrome-criteria-question", "text": "대사증후군 진단 기준이 뭔가요?", "form": "question", "condition": "metabolic_syndrome", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "metabolic_syndrome-lifestyle-keyword", "text": "대사증후군 생활습관 교정 체중 감량 금연 절주", "form": "keyword", "condition": "metabolic_syndrome", "category": "lifestyle", "split": "test", "excluded": false}
+{"query_id": "metabolic_syndrome-lifestyle-question", "text": "대사증후군 위험인데, 어떤 생활 습관을 바꿔야 할까요?", "form": "question", "condition": "metabolic_syndrome", "category": "lifestyle", "split": "test", "excluded": false}
+{"query_id": "fatty_liver-criteria-keyword", "text": "지방간 진단 기준 분류", "form": "keyword", "condition": "fatty_liver", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "fatty_liver-criteria-question", "text": "지방간 진단 기준이 뭔가요?", "form": "question", "condition": "fatty_liver", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "fatty_liver-diet-keyword", "text": "지방간 예방 식이요법 식사 관리", "form": "keyword", "condition": "fatty_liver", "category": "diet", "split": "test", "excluded": false}
+{"query_id": "fatty_liver-diet-question", "text": "지방간인데 식단은 어떻게 해야 하나요?", "form": "question", "condition": "fatty_liver", "category": "diet", "split": "test", "excluded": false}
+{"query_id": "fatty_liver-exercise-keyword", "text": "지방간 운동요법 유산소 근력운동 권고", "form": "keyword", "condition": "fatty_liver", "category": "exercise", "split": "tune", "excluded": false}
+{"query_id": "fatty_liver-exercise-question", "text": "지방간인데 어떤 운동을 해야 하나요?", "form": "question", "condition": "fatty_liver", "category": "exercise", "split": "tune", "excluded": false}
+{"query_id": "fatty_liver-lifestyle-keyword", "text": "지방간 생활습관 교정 체중 감량 금연 절주", "form": "keyword", "condition": "fatty_liver", "category": "lifestyle", "split": "test", "excluded": false}
+{"query_id": "fatty_liver-lifestyle-question", "text": "지방간이 있으면 술과 체중 관리는 어떻게 해야 하나요?", "form": "question", "condition": "fatty_liver", "category": "lifestyle", "split": "test", "excluded": false}
+{"query_id": "sarcopenia-criteria-keyword", "text": "근감소증 진단 기준 분류", "form": "keyword", "condition": "sarcopenia", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "sarcopenia-criteria-question", "text": "근감소증 진단 기준이 뭔가요?", "form": "question", "condition": "sarcopenia", "category": "criteria", "split": "tune", "excluded": false}
+{"query_id": "sarcopenia-exercise-keyword", "text": "근감소증 운동요법 유산소 근력운동 권고", "form": "keyword", "condition": "sarcopenia", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "sarcopenia-exercise-question", "text": "근육이 너무 없는데, 어떤 운동부터 시작해야 할까요?", "form": "question", "condition": "sarcopenia", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "general-diet-keyword", "text": "한국인 영양소 섭취기준 권장섭취량 상한섭취량", "form": "keyword", "condition": "general", "category": "diet", "split": "tune", "excluded": false}
+{"query_id": "general-diet-question", "text": "하루에 단백질이랑 나트륨은 얼마나 먹어야 하나요?", "form": "question", "condition": "general", "category": "diet", "split": "tune", "excluded": false}
+{"query_id": "general-exercise-keyword", "text": "성인 신체활동 권장량 유산소 근력운동", "form": "keyword", "condition": "general", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "general-exercise-question", "text": "인바디 결과가 안 좋은데, 어떤 운동부터 시작할까요?", "form": "question", "condition": "general", "category": "exercise", "split": "test", "excluded": false}
+{"query_id": "inbody-1", "text": "체지방률 32% 40대 여성 비만 기준", "form": "inbody", "condition": "mixed", "category": "mixed", "split": "test", "excluded": false}
+{"query_id": "inbody-2", "text": "골격근량 감소 노인 근력운동 방법", "form": "inbody", "condition": "mixed", "category": "mixed", "split": "tune", "excluded": false}
+{"query_id": "inbody-3", "text": "내장지방 높고 허리둘레 큰 남성 대사증후군 위험", "form": "inbody", "condition": "mixed", "category": "mixed", "split": "test", "excluded": false}
+{"query_id": "none-1", "text": "통풍 환자 식이요법 퓨린 제한", "form": "unanswerable", "condition": "none", "category": "none", "split": "test", "excluded": false}
+{"query_id": "none-2", "text": "갑상선 기능저하증 운동 주의사항", "form": "unanswerable", "condition": "none", "category": "none", "split": "tune", "excluded": false}
+{"query_id": "none-3", "text": "임신 중 철분제 복용 시기", "form": "unanswerable", "condition": "none", "category": "none", "split": "test", "excluded": false}

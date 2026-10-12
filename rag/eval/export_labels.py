@@ -8,25 +8,53 @@ from pathlib import Path
 from rag.eval.metrics import compact
 
 _QUERY_FIELDS = ("query_id", "text", "form", "condition", "category", "split")
+_MIN_EVIDENCE_CHARS = 10  # 10-gram 매칭 단위보다 짧은 조각은 아무 청크에나 걸린다
+
+
+def _spans(fragments: list[str], content: str) -> list[str]:
+    """청크 안에서 바로 이어지는 조각을 한 구간으로 합치고, 너무 짧은 구간은 버린다."""
+    text, runs, end = compact(content), [], -1
+    for f in fragments:
+        cf = compact(f)
+        if not cf:
+            continue
+        pos = text.find(cf, max(end, 0))
+        if runs and pos >= 0 and pos == end:
+            runs[-1] += " " + f
+        else:
+            runs.append(f)
+        end = pos + len(cf) if pos >= 0 else -1
+    return [r for r in runs if len(compact(r)) >= _MIN_EVIDENCE_CHARS]
 
 
 def export(items: dict, decisions: list[dict], query_edits: list[dict]) -> tuple[list[dict], list[dict], dict]:
     candidates = {(q["query_id"], c["content_hash"]): c for q in items["queries"] for c in q["candidates"]}
     edits = {e["query_id"]: e for e in query_edits}
-    stats = {"candidates": len(candidates), "reviewed": 0, "relevant": 0, "relevant_without_evidence": 0,
-             "unknown_decisions": 0}
+    stats = {"candidates": len(candidates), "reviewed": 0, "llm_filled": 0, "relevant": 0,
+             "relevant_without_evidence": 0, "unknown_decisions": 0}
 
-    labels, seen = [], set()
+    decided = []
     for d in decisions:
-        candidate = candidates.get((d["query_id"], d["content_hash"]))
-        if candidate is None:
+        if (d["query_id"], d["content_hash"]) not in candidates:
             stats["unknown_decisions"] += 1
             continue
         stats["reviewed"] += 1
+        decided.append(d | {"source": "human"})
+    # 사람이 안 본 후보는 LLM 1차 판정을 그대로 쓴다 (source="llm"으로 구분).
+    done = {(d["query_id"], d["content_hash"]) for d in decided}
+    for (qid, h), c in candidates.items():
+        if (qid, h) not in done and c["judged_relevant"] is not None:
+            stats["llm_filled"] += 1
+            decided.append({"query_id": qid, "content_hash": h, "relevant": c["judged_relevant"],
+                            "evidence": c["judged_evidence"], "source": "llm"})
+
+    labels, seen = [], set()
+    for d in decided:
+        candidate = candidates[(d["query_id"], d["content_hash"])]
         if not d["relevant"]:
             continue
         stats["relevant"] += 1
-        evidence = [e for e in d["evidence"] if compact(e)]
+        evidence = _spans(d["evidence"], candidate["content"])
         if not evidence:
             stats["relevant_without_evidence"] += 1
             continue
@@ -37,7 +65,7 @@ def export(items: dict, decisions: list[dict], query_edits: list[dict]) -> tuple
             seen.add(key)
             labels.append({"query_id": d["query_id"], "doc_id": candidate["doc_id"],
                            "page_start": candidate["page_start"], "page_end": candidate["page_end"],
-                           "content_hash": d["content_hash"], "evidence": e, "source": "human"})
+                           "content_hash": d["content_hash"], "evidence": e, "source": d["source"]})
     stats["unreviewed"] = stats["candidates"] - stats["reviewed"]
 
     queries = []

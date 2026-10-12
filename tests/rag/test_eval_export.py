@@ -18,7 +18,7 @@ ITEMS = {"queries": [
 
 def test_export_labels_and_query_edits():
     decisions = [
-        {"query_id": "q1", "content_hash": "h1", "relevant": True, "evidence": ["소금을 5 g 이하로", "소금을 5g 이하로"]},
+        {"query_id": "q1", "content_hash": "h1", "relevant": True, "evidence": ["소금은 하루 5 g 이하로 줄인다", "소금은 하루 5g 이하로 줄인다"]},
         {"query_id": "q1", "content_hash": "h2", "relevant": False, "evidence": []},
         {"query_id": "none-1", "content_hash": "h2", "relevant": False, "evidence": []},
     ]
@@ -26,7 +26,7 @@ def test_export_labels_and_query_edits():
     labels, queries, stats = export(ITEMS, decisions, edits)
 
     assert labels == [{"query_id": "q1", "doc_id": "kha", "page_start": 74, "page_end": 74, "content_hash": "h1",
-                       "evidence": "소금을 5 g 이하로", "source": "human"}]
+                       "evidence": "소금은 하루 5 g 이하로 줄인다", "source": "human"}]
     q2 = next(q for q in queries if q["query_id"] == "q2")
     assert q2["text"] == "고친 질문?" and q2["excluded"] is False
     assert "candidates" not in q2
@@ -53,3 +53,28 @@ def test_excluded_query_kept_with_flag_and_not_counted():
     assert q2["excluded"] is True and q2["text"] == "질문 초안"
     assert stats["excluded_queries"] == ["q2"]
     assert "q2" not in stats["answerable_queries_without_labels"]
+
+
+def _items_with(content, judged_relevant=None, judged_evidence=()):
+    c = _cand("h1", 74) | {"content": content, "judged_relevant": judged_relevant,
+                           "judged_evidence": list(judged_evidence)}
+    return {"queries": [{"query_id": "q1", "text": "운동", "form": "keyword", "condition": "hypertension",
+                         "category": "exercise", "split": "tune", "candidates": [c]}]}
+
+
+CONTENT = "운동\n속보, 조깅은 혈압을 낮추는\n효과가 있다. 주 5일 운동한다.\n연구 결과 다른 내용이다. 운동"
+
+
+def test_contiguous_fragments_merge_and_short_runs_drop():
+    frags = ["운동", "속보, 조깅은 혈압을 낮추는", "효과가 있다.", "운동"]
+    labels, _, _ = export(_items_with(CONTENT), [{"query_id": "q1", "content_hash": "h1", "relevant": True,
+                                                  "evidence": frags}], [])
+    assert [l["evidence"] for l in labels] == ["운동 속보, 조깅은 혈압을 낮추는 효과가 있다."]
+
+
+def test_unreviewed_candidates_fall_back_to_llm_judgment():
+    items = _items_with(CONTENT, True, ["속보, 조깅은 혈압을 낮추는\n효과가 있다.", "주 5일 운동한다."])
+    labels, _, stats = export(items, [], [])
+    assert [(l["evidence"], l["source"]) for l in labels] == [
+        ("속보, 조깅은 혈압을 낮추는\n효과가 있다. 주 5일 운동한다.", "llm")]
+    assert stats["reviewed"] == 0 and stats["llm_filled"] == 1 and stats["unreviewed"] == 1
