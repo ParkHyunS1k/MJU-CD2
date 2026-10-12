@@ -10,7 +10,7 @@ from google.genai import types
 from pydantic import BaseModel
 
 MODEL = "gemini-2.5-flash"
-_RETRY_WAITS = (5, 10, 20, 40)
+_RETRY_WAITS = (15, 30, 60, 60)  # 무료 등급 한도는 분 단위로 풀린다
 _RETRYABLE = {429, 500, 503}
 
 log = logging.getLogger(__name__)
@@ -25,6 +25,19 @@ def _status(error: Exception) -> int | None:
     return getattr(error, "code", None) or getattr(error, "status_code", None)
 
 
+def call_with_retry(fn):
+    """429/500/503이면 기다렸다 다시 호출한다."""
+    for attempt, wait in enumerate((*_RETRY_WAITS, None)):
+        try:
+            return fn()
+        except Exception as e:
+            if wait is None or _status(e) not in _RETRYABLE:
+                raise
+            log.warning("Gemini %s, retry %d in %ss", _status(e), attempt + 1, wait)
+            time.sleep(wait)
+    raise AssertionError("unreachable")
+
+
 def generate_json(client: genai.Client, prompt: str, schema: type[BaseModel]) -> BaseModel:
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
@@ -32,13 +45,5 @@ def generate_json(client: genai.Client, prompt: str, schema: type[BaseModel]) ->
         temperature=0,
         thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
-    for attempt, wait in enumerate((*_RETRY_WAITS, None)):
-        try:
-            res = client.models.generate_content(model=MODEL, contents=prompt, config=config)
-            return schema.model_validate_json(res.text)
-        except Exception as e:
-            if wait is None or _status(e) not in _RETRYABLE:
-                raise
-            log.warning("Gemini %s, retry %d in %ss", _status(e), attempt + 1, wait)
-            time.sleep(wait)
-    raise AssertionError("unreachable")
+    res = call_with_retry(lambda: client.models.generate_content(model=MODEL, contents=prompt, config=config))
+    return schema.model_validate_json(res.text)

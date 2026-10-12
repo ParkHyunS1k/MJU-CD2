@@ -38,7 +38,7 @@ class CachedEmbedder:
 
 
 class GeminiEmbedder:
-    _BATCH = 100
+    _BATCH = 20  # 청크 100개는 무료 등급 분당 토큰 한도를 넘는다
 
     def __init__(self, dims: int, client=None):
         self.dims = dims
@@ -48,17 +48,18 @@ class GeminiEmbedder:
     def encode(self, texts: list[str], kind: str) -> np.ndarray:
         from google.genai import types
 
-        from rag.eval.llm import get_client
+        from rag.eval.llm import call_with_retry, get_client
 
         client = self._client or get_client()
         task = "RETRIEVAL_QUERY" if kind == "query" else "RETRIEVAL_DOCUMENT"
         rows = []
         for i in range(0, len(texts), self._BATCH):
-            res = client.models.embed_content(
+            batch = texts[i : i + self._BATCH]
+            res = call_with_retry(lambda: client.models.embed_content(
                 model="gemini-embedding-001",
-                contents=texts[i : i + self._BATCH],
+                contents=batch,
                 config=types.EmbedContentConfig(task_type=task, output_dimensionality=self.dims),
-            )
+            ))
             rows.extend(e.values for e in res.embeddings)
         return l2_normalize(np.array(rows))
 

@@ -43,3 +43,35 @@ def test_registry_names():
     assert set(REGISTRY) == {
         "gemini-768", "gemini-1536", "gemini-3072", "bge-m3", "kure-v1", "qwen3-0.6b", "e5-large-instruct",
     }
+
+
+class _QuotaError(Exception):
+    code = 429
+
+
+class FakeGeminiClient:
+    def __init__(self, fail_first=1):
+        self.batch_sizes = []
+        self.fail_first = fail_first
+        self.models = self
+
+    def embed_content(self, model, contents, config):
+        if self.fail_first:
+            self.fail_first -= 1
+            raise _QuotaError("RESOURCE_EXHAUSTED")
+        self.batch_sizes.append(len(contents))
+        values = [type("E", (), {"values": [1.0, float(i)]})() for i in range(len(contents))]
+        return type("R", (), {"embeddings": values})()
+
+
+def test_gemini_embedder_small_batches_and_retries_on_quota(monkeypatch):
+    from rag.eval import llm
+    from rag.eval.embedders import GeminiEmbedder
+
+    sleeps = []
+    monkeypatch.setattr(llm.time, "sleep", sleeps.append)
+    client = FakeGeminiClient(fail_first=1)
+    vectors = GeminiEmbedder(2, client=client).encode([f"t{i}" for i in range(45)], "doc")
+    assert vectors.shape == (45, 2)
+    assert client.batch_sizes == [20, 20, 5]
+    assert len(sleeps) == 1 and sleeps[0] >= 15
