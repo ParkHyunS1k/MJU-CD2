@@ -21,8 +21,11 @@ def update_me(
     payload: UserUpdate,
     current: CurrentUser = Depends(get_current_user),
 ):
+    # 보낸 필드만 저장한다. null로 보낸 값도 저장한다(가족력 '모름' 등).
+    update_data = payload.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No fields to update")
     sb = get_supabase_admin()
-    update_data = payload.model_dump(exclude_none=True)
     res = sb.table("users").update(update_data).eq("id", current.id).execute()
     if not res.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
