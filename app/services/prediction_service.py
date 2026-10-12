@@ -1,149 +1,116 @@
+"""인바디 수치 + 프로필로 성인병 4종의 현재 유병 확률·등급·기여 요인을 계산한다.
+모델: training/train.py가 만든 models/{disease}.pkl(version 2).
+설계: docs/superpowers/specs/2026-10-12-risk-model-redesign-design.md 6절."""
 from __future__ import annotations
 
-import warnings
+import logging
 from datetime import date
 from functools import lru_cache
-import os
 from pathlib import Path
-import tempfile
 
 import joblib
 import numpy as np
 
-_CACHE_DIR = Path(tempfile.gettempdir()) / "healthcare-api-cache"
-_MPLCONFIG_DIR = _CACHE_DIR / "matplotlib"
-_XDG_CACHE_HOME = _CACHE_DIR / "xdg"
-_MPLCONFIG_DIR.mkdir(parents=True, exist_ok=True)
-_XDG_CACHE_HOME.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("MPLCONFIGDIR", str(_MPLCONFIG_DIR))
-os.environ.setdefault("XDG_CACHE_HOME", str(_XDG_CACHE_HOME))
+log = logging.getLogger(__name__)
 
-import shap
-
-MODELS_DIR = Path(__file__).parent.parent.parent / "models"
-
+MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models"
 DISEASES = ["hypertension", "cholesterol", "diabetes", "triglyceride"]
+FEATURES = ["age", "female", "bmi", "body_fat_percentage",
+            "fh_hypertension", "fh_diabetes", "fh_dyslipidemia"]
+FAMILY_HISTORY = FEATURES[4:]
+MIN_AGE = 19
+TOP_K = 3
+# KNHANES 19–59세 실제 범위(BMI 14.5–48.0, 체지방률 6.7–54.6)에 여유를 둔 값. 벗어나면 OCR 오독으로 본다.
+BMI_RANGE = (12.0, 60.0)
+PBF_RANGE = (3.0, 70.0)
 
-# cholesterol은 통합 모델(sex 포함), 나머지는 성별 분리
-_GENDER_SPLIT = {"hypertension", "diabetes", "triglyceride"}
 
-
-def _patch_sklearn_compat(model) -> None:
-    """구버전 sklearn으로 학습된 모델의 호환성 패치."""
-    from sklearn.linear_model import LogisticRegression
-    clf = model.named_steps.get("clf", model) if hasattr(model, "named_steps") else model
-    if isinstance(clf, LogisticRegression) and not hasattr(clf, "multi_class"):
-        clf.multi_class = "auto"
+class ModelBundleError(RuntimeError):
+    """학습 코드와 서비스 코드의 모델 형식이 맞지 않는다."""
 
 
 @lru_cache(maxsize=None)
 def _load_bundle(path: str) -> dict:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        bundle = joblib.load(path)
-    _patch_sklearn_compat(bundle.get("model"))
+    bundle = joblib.load(path)
+    if not isinstance(bundle, dict) or bundle.get("version") != 2:
+        raise ModelBundleError(f"{path}: version 2 번들이 아닙니다")
+    if bundle.get("features") != FEATURES:
+        raise ModelBundleError(f"{path}: 입력 변수가 다릅니다 {bundle.get('features')}")
     return bundle
 
 
-def _bundle_path(disease: str, sex: str) -> Path:
-    if disease in _GENDER_SPLIT:
-        fname = f"{disease}_{sex}.pkl"
-    else:
-        fname = f"{disease}.pkl"
-    return MODELS_DIR / fname
+def load_models() -> list[dict]:
+    """있는 모델을 모두 불러온다. 앱 시작 시 호출해 형식 오류와 '모델 없음'을 배포 단계에서 드러낸다."""
+    out = []
+    for key in DISEASES:
+        path = MODELS_DIR / f"{key}.pkl"
+        if not path.exists():
+            log.warning("모델 파일이 없어 건너뜁니다: %s", path)
+            continue
+        out.append(_load_bundle(str(path)))
+    if not out:
+        raise ModelBundleError(f"{MODELS_DIR}에 사용할 모델이 없습니다")
+    return out
+
+
+def _check_range(name: str, value: float, bounds: tuple[float, float]) -> float:
+    if not bounds[0] <= value <= bounds[1]:
+        raise ValueError(f"{name} {value}이(가) 허용 범위({bounds[0]:g}–{bounds[1]:g})를 벗어났습니다. "
+                         "인바디 수치를 확인해 주세요.")
+    return value
+
+
+def _inputs(inbody: dict, user_profile: dict) -> np.ndarray | None:
+    gender = user_profile.get("gender")
+    if not gender:
+        raise ValueError("성별 정보가 없습니다.")
+    birth_year = user_profile.get("birth_year")
+    if not birth_year:
+        raise ValueError("출생연도 정보가 없습니다.")
+    age = date.today().year - int(birth_year)
+    if age < MIN_AGE:
+        raise ValueError("성인(19세 이상)만 위험도를 예측할 수 있습니다.")
+
+    bmi, pbf = inbody.get("bmi"), inbody.get("body_fat_percentage")
+    if bmi is None or pbf is None:
+        return None
+    bmi = _check_range("BMI", float(bmi), BMI_RANGE)
+    pbf = _check_range("체지방률", float(pbf), PBF_RANGE)
+    family = [1.0 if user_profile.get(k) else 0.0 for k in FAMILY_HISTORY]
+    return np.array([[age, 1.0 if gender == "female" else 0.0, bmi, pbf, *family]])
+
+
+def _contributions(bundle: dict, x: np.ndarray) -> dict[str, float]:
+    """로지스틱 회귀의 로그 오즈 기여 = 계수 × (변환값 − 학습 평균). SHAP 값과 같다."""
+    pipe = bundle["model"]
+    z = pipe[:-1].transform(x)[0]
+    c = pipe[-1].coef_[0] * (z - np.asarray(bundle["background"]))
+    return {f: float(c[idx].sum()) for f, idx in bundle["feature_groups"].items()}
 
 
 def _risk_level(prob: float, bundle: dict) -> str:
     if prob >= bundle["thresh_high"]:
         return "high"
-    if prob >= bundle["thresh_binary"]:
+    if prob >= bundle["thresh_medium"]:
         return "medium"
     return "low"
 
 
-@lru_cache(maxsize=None)
-def _shap_explainer(bundle_path: str):
-    bundle = _load_bundle(bundle_path)
-    model = bundle["model"]
-
-    if hasattr(model, "steps"):
-        steps = model.named_steps
-        clf = steps["clf"]
-        if "sc" in steps:
-            # SMOTE + StandardScaler + LR → LinearExplainer
-            background = np.zeros((1, len(bundle["features"])))
-            return "linear", steps["sc"], shap.LinearExplainer(clf, background)
-        else:
-            # SMOTE + ET (StandardScaler 없음) → TreeExplainer on clf
-            return "tree", None, shap.TreeExplainer(clf)
-
-    return "tree", None, shap.TreeExplainer(model)
-
-
-def _shap_values(bundle_path: str, X: np.ndarray) -> np.ndarray:
-    kind, transformer, explainer = _shap_explainer(bundle_path)
-    if kind == "linear":
-        X = transformer.transform(X)
-
-    vals = explainer.shap_values(X)
-    # list → 양성 클래스(index 1) 선택
-    if isinstance(vals, list):
-        vals = vals[1]
-    # (n_samples, n_features, n_classes) 형태일 경우 양성 클래스 슬라이스
-    if vals.ndim == 3:
-        vals = vals[:, :, 1]
-    return vals[0]  # 단일 샘플 → (n_features,)
-
-
 def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
-    """인바디 수치 + 유저 프로필로 4개 성인병 위험도를 예측한다."""
-    sex = user_profile.get("gender")
-    if not sex:
-        raise ValueError("성별 정보가 없습니다.")
-
-    birth_year = user_profile.get("birth_year")
-    age = date.today().year - birth_year if birth_year else None
-
-    raw = {
-        "age":     age,
-        "sex":     1 if sex == "female" else 0,
-        "BIA_PBF": inbody.get("body_fat_percentage"),
-        "SMM":     inbody.get("skeletal_muscle_mass"),
-    }
+    """질환별 {disease, probability, risk_level, top_factors}. 필수 수치가 없으면 빈 리스트."""
+    x = _inputs(inbody, user_profile)
+    if x is None:
+        return []
 
     results = []
-    for disease in DISEASES:
-        path = _bundle_path(disease, sex)
-        bundle = _load_bundle(str(path))
-        features = bundle["features"]
-        feat_kor = bundle["feat_kor"]
-
-        vals = [raw.get(f) for f in features]
-        if any(v is None for v in vals):
-            continue  # 필수 수치 누락 시 해당 질병 스킵
-
-        X = np.array([vals], dtype=float)
-        prob = float(bundle["model"].predict_proba(X)[0][1])
-        level = _risk_level(prob, bundle)
-        shap_vals = _shap_values(str(path), X)
-
-        top_factors = []
-        for i, feat in enumerate(features):
-            if feat == "sex":
-                continue
-            top_factors.append({
-                "feature_kor": feat_kor[feat],
-                "value": float(vals[i]),
-                "shap_value": float(shap_vals[i]),
-                "direction": "up" if shap_vals[i] > 0 else "down",
-            })
-        top_factors.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
-
-        results.append({
-            "disease": bundle["target"],
-            "probability": prob,
-            "risk_level": level,
-            "top_factors": top_factors[:3],
-        })
-
+    for bundle in load_models():
+        prob = float(bundle["model"].predict_proba(x)[0, 1])
+        factors = [
+            {"feature_kor": bundle["feat_kor"][f], "value": float(x[0, FEATURES.index(f)]),
+             "shap_value": c, "direction": "up" if c > 0 else "down"}
+            for f, c in _contributions(bundle, x).items() if f != "female"
+        ]
+        factors.sort(key=lambda d: abs(d["shap_value"]), reverse=True)
+        results.append({"disease": bundle["target"], "probability": prob,
+                        "risk_level": _risk_level(prob, bundle), "top_factors": factors[:TOP_K]})
     return results
