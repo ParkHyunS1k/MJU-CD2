@@ -34,6 +34,7 @@
 - **DB에서 `null`로 오는 가족력**(③ 이후 nullable boolean): 값이 없을 때와 같이 0으로 처리해야 한다. Task 7 `test_family_history_none_or_missing_is_zero`에서 검사한다.
 - **60세 이상 또는 극단값**(나이 80, BMI 45, 체지방률 50): 예외 없이 0~1 사이의 확률을 내야 한다. Task 7 `test_extreme_inputs_predict_finite`에서 검사한다.
 - **정수로 오는 수치**(Supabase가 `bmi: 24`로 반환): 실수와 같게 처리해야 한다. Task 7 `test_integer_inputs`에서 검사한다.
+- **추가로 보완한 것**(사용자 요청): 모델이 하나도 없을 때(`test_no_models_raises`), 앱 시작 시 사전 로드(Task 7 Step 4, Task 9 Step 4), OCR 오독 같은 범위 밖 입력(`test_out_of_range_inputs_raise`)을 다룬다.
 
 ---
 
@@ -1304,6 +1305,7 @@ git commit -m "feat(training): add nested-CV evaluation, comparisons and report"
 
 **Files:**
 - Modify (전체 교체): `app/services/prediction_service.py`
+- Modify: `main.py` (시작 시 모델 로드)
 - Modify: `requirements.txt`
 - Test: `tests/risk_model/test_prediction_service.py`
 
@@ -1311,8 +1313,15 @@ git commit -m "feat(training): add nested-CV evaluation, comparisons and report"
 - Consumes: `models/{key}.pkl` v2 번들(Task 2 형식). 테스트는 `training.model.fit_bundle`로 번들을 만든다.
 - Produces:
   - `predict_all(inbody: dict, user_profile: dict) -> list[dict]`(형식은 기존과 같다)
+  - `load_models() -> list[dict]`. 있는 모델을 모두 불러오고, 하나도 없으면 `ModelBundleError`를 던진다. `main.py`가 앱 시작 시 호출한다.
   - `ModelBundleError(RuntimeError)`
-  - 모듈 변수 `MODELS_DIR`, `DISEASES`, `FEATURES`, 내부 함수 `_load_bundle`(lru_cache), `_contributions(bundle, x) -> dict[str, float]`
+  - 모듈 변수 `MODELS_DIR`, `DISEASES`, `FEATURES`, `BMI_RANGE = (12.0, 60.0)`, `PBF_RANGE = (3.0, 70.0)`, 내부 함수 `_load_bundle`(lru_cache), `_contributions(bundle, x) -> dict[str, float]`
+
+**빈틈 보완(사용자 요청)**
+- 모델이 하나도 없으면 빈 리스트(호출부의 잘못된 422 안내) 대신 `ModelBundleError`를 던진다.
+- 앱 시작 시 `load_models()`를 호출한다. 그러면 형식이 틀린 모델은 배포가 실패하는 단계에서 드러난다.
+- BMI·체지방률이 범위를 벗어나면(OCR 오독 등) 예측하지 않고 `ValueError`를 던진다. 호출부가 400으로 응답한다. 범위의 근거는 KNHANES 19–59세 실제 범위(BMI 14.5–48.0, 체지방률 6.7–54.6)에 여유를 둔 것이다.
+- 주의: 이 작업을 커밋한 뒤부터 Task 9까지는 `models/`에 옛 `cholesterol.pkl`이 있어서 로컬에서 앱이 시작되지 않는다. Task 9에서 해소된다. push는 Task 9 이후에만 한다.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -1407,6 +1416,30 @@ def test_invalid_profile_raises(models_dir, profile, msg):
         ps.predict_all(INBODY, profile)
 
 
+@pytest.mark.parametrize("inbody", [
+    {"bmi": 240.0, "body_fat_percentage": 28.0},   # 24.0 오독
+    {"bmi": 5.0, "body_fat_percentage": 28.0},
+    {"bmi": 27.0, "body_fat_percentage": 85.0},
+    {"bmi": 27.0, "body_fat_percentage": 1.0},
+])
+def test_out_of_range_inputs_raise(models_dir, inbody):
+    with pytest.raises(ValueError, match="범위"):
+        ps.predict_all(inbody, PROFILE)
+
+
+def test_no_models_raises(models_dir):
+    for p in models_dir.glob("*.pkl"):
+        p.unlink()
+    with pytest.raises(ps.ModelBundleError):
+        ps.load_models()
+    with pytest.raises(ps.ModelBundleError):
+        ps.predict_all(INBODY, PROFILE)
+
+
+def test_load_models_returns_available(models_dir):
+    assert [b["disease_key"] for b in ps.load_models()] == list(DISEASES)
+
+
 def test_extreme_inputs_predict_finite(models_dir):
     res = ps.predict_all({"bmi": 45.0, "body_fat_percentage": 50.0},
                          {"gender": "female", "birth_year": date.today().year - 80})
@@ -1486,6 +1519,9 @@ FEATURES = ["age", "female", "bmi", "body_fat_percentage",
 FAMILY_HISTORY = FEATURES[4:]
 MIN_AGE = 19
 TOP_K = 3
+# KNHANES 19–59세 실제 범위(BMI 14.5–48.0, 체지방률 6.7–54.6)에 여유를 둔 값. 벗어나면 OCR 오독으로 본다.
+BMI_RANGE = (12.0, 60.0)
+PBF_RANGE = (3.0, 70.0)
 
 
 class ModelBundleError(RuntimeError):
@@ -1502,7 +1538,8 @@ def _load_bundle(path: str) -> dict:
     return bundle
 
 
-def _bundles() -> list[dict]:
+def load_models() -> list[dict]:
+    """있는 모델을 모두 불러온다. 앱 시작 시 호출해 형식 오류와 '모델 없음'을 배포 단계에서 드러낸다."""
     out = []
     for key in DISEASES:
         path = MODELS_DIR / f"{key}.pkl"
@@ -1510,7 +1547,16 @@ def _bundles() -> list[dict]:
             log.warning("모델 파일이 없어 건너뜁니다: %s", path)
             continue
         out.append(_load_bundle(str(path)))
+    if not out:
+        raise ModelBundleError(f"{MODELS_DIR}에 사용할 모델이 없습니다")
     return out
+
+
+def _check_range(name: str, value: float, bounds: tuple[float, float]) -> float:
+    if not bounds[0] <= value <= bounds[1]:
+        raise ValueError(f"{name} {value}이(가) 허용 범위({bounds[0]:g}–{bounds[1]:g})를 벗어났습니다. "
+                         "인바디 수치를 확인해 주세요.")
+    return value
 
 
 def _inputs(inbody: dict, user_profile: dict) -> np.ndarray | None:
@@ -1527,8 +1573,10 @@ def _inputs(inbody: dict, user_profile: dict) -> np.ndarray | None:
     bmi, pbf = inbody.get("bmi"), inbody.get("body_fat_percentage")
     if bmi is None or pbf is None:
         return None
+    bmi = _check_range("BMI", float(bmi), BMI_RANGE)
+    pbf = _check_range("체지방률", float(pbf), PBF_RANGE)
     family = [1.0 if user_profile.get(k) else 0.0 for k in FAMILY_HISTORY]
-    return np.array([[age, 1.0 if gender == "female" else 0.0, float(bmi), float(pbf), *family]])
+    return np.array([[age, 1.0 if gender == "female" else 0.0, bmi, pbf, *family]])
 
 
 def _contributions(bundle: dict, x: np.ndarray) -> dict[str, float]:
@@ -1554,7 +1602,7 @@ def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
         return []
 
     results = []
-    for bundle in _bundles():
+    for bundle in load_models():
         prob = float(bundle["model"].predict_proba(x)[0, 1])
         factors = [
             {"feature_kor": bundle["feat_kor"][f], "value": float(x[0, FEATURES.index(f)]),
@@ -1567,7 +1615,31 @@ def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
     return results
 ```
 
-- [ ] **Step 4: 서버 의존성 정리**
+- [ ] **Step 4: 앱 시작 시 모델 로드 (`main.py`)**
+
+`main.py` 맨 위 import 블록에 추가한다.
+
+```python
+from contextlib import asynccontextmanager
+
+from app.services.prediction_service import load_models
+```
+
+`app = FastAPI(title="Healthcare API", version="0.1.0")` 줄을 다음으로 바꾼다.
+
+```python
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    load_models()  # 모델 형식 오류·모델 없음은 배포(시작) 단계에서 실패시킨다
+    yield
+
+
+app = FastAPI(title="Healthcare API", version="0.1.0", lifespan=lifespan)
+```
+
+`main.py`는 import할 때 환경변수(`.env`)가 필요해서 단위 테스트로 검사하지 않는다. 동작 확인은 Task 9 Step 4에서 실제 모델로 한다.
+
+- [ ] **Step 5: 서버 의존성 정리**
 
 `requirements.txt`에서 다음을 바꾼다.
 - `scikit-learn>=1.7.0` → `scikit-learn==1.8.0`
@@ -1581,16 +1653,16 @@ grep -rnE "^\s*(import|from) (shap|imblearn)" app/ main.py
 ```
 Expected: 출력 없음. 필드 이름 `shap_value`는 출력 형식이라 그대로 남는다.
 
-- [ ] **Step 5: 통과 확인**
+- [ ] **Step 6: 통과 확인**
 
 Run: `.venv/bin/python -m pytest tests/risk_model/test_prediction_service.py -q`
-Expected: `15 passed, 1 skipped` (`test_real_models_if_present`는 v2 모델이 생기기 전까지 skip)
+Expected: `21 passed, 1 skipped` (`test_real_models_if_present`는 v2 모델이 생기기 전까지 skip)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add app/services/prediction_service.py requirements.txt tests/risk_model/test_prediction_service.py
-git commit -m "feat(prediction): read v2 logistic bundles, compute contributions without shap"
+git add app/services/prediction_service.py main.py requirements.txt tests/risk_model/test_prediction_service.py
+git commit -m "feat(prediction): read v2 logistic bundles, validate inputs, load models at startup"
 ```
 
 ---
@@ -1674,6 +1746,18 @@ for r in predict_all({'bmi': 27.0, 'body_fat_percentage': 28.0}, {'gender': 'mal
 "
 ```
 Expected: 통과한 질환 수만큼 줄이 나온다. 요인 이름은 `나이`, `BMI`, `체지방률`, `○○ 가족력` 중에서 나온다.
+
+앱 시작(모델 사전 로드)도 확인한다.
+
+```bash
+.venv/bin/python -c "
+from fastapi.testclient import TestClient
+import main
+with TestClient(main.app) as c:
+    print(c.get('/health').json())
+"
+```
+Expected: `{'status': 'ok'}`. 모델 형식이 틀리면 여기서 `ModelBundleError`가 난다.
 
 - [ ] **Step 5: `training/README.md` 교체**
 
