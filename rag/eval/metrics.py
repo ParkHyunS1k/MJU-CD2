@@ -1,7 +1,10 @@
 """평가 지표. 근거 문장 매칭은 청킹·파서와 무관하게 쓰도록 공백을 지우고 비교한다."""
 
+import math
 import re
 import unicodedata
+
+import numpy as np
 
 
 def compact(text: str) -> str:
@@ -20,3 +23,46 @@ def evidence_coverage(evidence: str, text: str, n: int = 10) -> float:
 
 def contains_evidence(text: str, evidence: str, threshold: float = 0.5) -> bool:
     return evidence_coverage(evidence, text) >= threshold
+
+
+def budget_cut(ranked: list[int], lengths: list[int], budget: int = 3600) -> list[int]:
+    """누적 글자 수가 budget을 넘기 전까지의 상위 결과. 첫 결과는 항상 담는다."""
+    out, total = [], 0
+    for i in ranked:
+        if out and total + lengths[i] > budget:
+            break
+        out.append(i)
+        total += lengths[i]
+    return out
+
+
+def query_metrics(ranked: list[int], found: dict[int, set[int]], n_evidence: int, lengths: list[int],
+                  ks=(1, 3, 5, 10, 20), budget: int = 3600) -> dict[str, float]:
+    """found: 청크 번호 → 그 청크가 담은 근거 번호. 관련 청크 = found에 있는 청크."""
+
+    def ev(top: list[int]) -> float:
+        return len(set().union(*(found[i] for i in top if i in found))) / n_evidence
+
+    out = {}
+    for k in ks:
+        top = ranked[:k]
+        out[f"recall@{k}"] = float(any(i in found for i in top))
+        out[f"ev_recall@{k}"] = ev(top)
+    first = next((r for r, i in enumerate(ranked) if i in found), None)
+    out["mrr"] = 0.0 if first is None else 1 / (first + 1)
+    dcg = sum(1 / math.log2(r + 2) for r, i in enumerate(ranked[:10]) if i in found)
+    idcg = sum(1 / math.log2(r + 2) for r in range(min(10, len(found))))
+    out["ndcg@10"] = dcg / idcg if idcg else 0.0
+    cut = budget_cut(ranked, lengths, budget)
+    out["recall@budget"] = float(any(i in found for i in cut))
+    out["ev_recall@budget"] = ev(cut)
+    out["budget_chunks"] = float(len(cut))
+    return out
+
+
+def bootstrap_ci(values: list[float], n: int = 1000, seed: int = 0) -> tuple[float, float, float]:
+    if not values:
+        return (math.nan, math.nan, math.nan)
+    v = np.asarray(values, dtype=float)
+    means = np.random.default_rng(seed).choice(v, size=(n, len(v))).mean(axis=1)
+    return (float(v.mean()), float(np.quantile(means, 0.025)), float(np.quantile(means, 0.975)))
