@@ -29,6 +29,9 @@ BASE = {"parser": "pymupdf", "spacing": False, "chunker": "chars", "max_chars": 
         "embedding_model": "bge-m3", "dimensions": None, "hybrid": False, "reranker": None,
         "query_form": None, "final_k": None, "threshold": None}
 METRICS = ["ndcg@10", "recall@3", "recall@20", "mrr", "recall@budget", "ev_recall@budget"]
+# 1·2단계 주 지표. "근거가 하나라도 있나"(recall@budget)는 참고문헌 제거 뒤 모든 구성에서 0.94~0.98로 차서
+# 변별력이 없어, 예산 안에 필요한 근거를 몇 %나 담았는지(ev_recall@budget)로 바꿨다(2026-10-14).
+BUDGET_PRIMARY = "ev_recall@budget"
 
 
 def load_state() -> dict:
@@ -111,7 +114,7 @@ def stage1(ctx: Ctx) -> dict:
     variants = [(f"{p}{' + 띄어쓰기' if s else ''}", {"parser": p, "spacing": s})
                 for p in ("pymupdf", "pdfplumber") for s in (False, True)]
     return run_stage(
-        ctx, "01_parser", "1단계: 파서", variants, "recall@budget",
+        ctx, "01_parser", "1단계: 파서", variants, BUDGET_PRIMARY,
         extra=lambda cfg, chunks: {"preservation": preservation(chunks, ctx.queries, ctx.labels)},
         note="라벨 근거 문장은 PyMuPDF 텍스트에서 뽑았으므로 preservation은 PyMuPDF에 유리하다. "
              "띄어쓰기는 공백을 지우고 비교하는 채점에 영향이 없고, 임베딩·BM25 결과로만 드러난다.")
@@ -124,7 +127,7 @@ def stage2(ctx: Ctx) -> dict:
     variants = [chars(2000, 0), chars(2000, 150), chars(1200, 0), paragraph("문단 묶기 1200자", "paragraph"),
                 chars(1200, 150), chars(600, 0), chars(600, 150), paragraph("문단 하나씩", "paragraph-single")]
     return run_stage(ctx, "02_chunking", "2단계: 청킹 (BGE-M3, 글자 수 예산 3,600자)", variants,
-                     "recall@budget", note="앞쪽일수록 청크 수가 적다(저장·검색 비용이 작다). "
+                     BUDGET_PRIMARY, note="앞쪽일수록 청크 수가 적다(저장·검색 비용이 작다). "
                      "예산을 넘는 마지막 청크는 잘라서 담아, 청크 크기와 관계없이 같은 3,600자를 본다.")
 
 

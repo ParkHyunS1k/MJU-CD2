@@ -66,7 +66,7 @@ def test_stage1_writes_results_and_state(ctx):
     md = (run.RESULTS / "01_parser.md").read_text()
     assert "preservation" in md and "**선택: pymupdf**" in md
     saved = json.loads((run.RESULTS / "01_parser.json").read_text())
-    assert saved["primary"] == "recall@budget" and len(saved["rows"]) == 4
+    assert saved["primary"] == "ev_recall@budget" and len(saved["rows"]) == 4
 
 
 def test_stage2_varies_chunking(ctx):
@@ -180,6 +180,8 @@ def test_chunk_variant_name_includes_chunker(tmp_path, monkeypatch):
 
 def test_stage2_includes_paragraph_chunkers(ctx):
     run.stage2(ctx)
-    cfgs = [r["cfg"] for r in json.loads((run.RESULTS / "02_chunking.json").read_text())["rows"]]
+    saved = json.loads((run.RESULTS / "02_chunking.json").read_text())
+    assert saved["primary"] == "ev_recall@budget"
+    cfgs = [r["cfg"] for r in saved["rows"]]
     assert {"chunker": "paragraph", "max_chars": 1200, "overlap": 0, "embedding_model": "bge-m3"} in cfgs
     assert cfgs[-1]["chunker"] == "paragraph-single"
