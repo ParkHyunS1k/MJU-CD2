@@ -34,7 +34,7 @@ def test_apply_keeps_only_verbatim_specific_new_evidence():
     corpus = [c["content"] for c in CHUNKS]
     rows, stats = apply_judgments(items, judgments, LABELS, corpus)
     assert rows == [{"query_id": "q1", "doc_id": "a", "page_start": 2, "page_end": 2, "content_hash": "h1",
-                     "evidence": "나트륨이 많은 가공식품과 국물 섭취를 줄이도록 권고한다.", "source": "llm-claude"}]
+                     "evidence": "나트륨이 많은 가공식품과 국물 섭취를 줄이도록 권고한다.", "source": "llm-gpt"}]
     assert stats == {"candidates": 2, "judged": 2, "relevant": 1, "added": 1, "dropped_evidence": 2}
 
 
@@ -45,3 +45,24 @@ def test_apply_drops_evidence_matching_many_chunks():
     rows, stats = apply_judgments(items, {"q1": [{"candidate_id": "c1", "relevant": True, "evidence": [tag]}]},
                                   LABELS, [c["content"] for c in chunks])
     assert rows == [] and stats["dropped_evidence"] == 1
+
+
+def test_judge_items_maps_judge_results_and_resumes(tmp_path):
+    from rag.eval.augment import judge_items
+    from rag.eval.judge import CandidateJudgment, QueryJudgment
+
+    calls = []
+
+    def ask(prompt):
+        calls.append(prompt)
+        return QueryJudgment(judgments=[
+            CandidateJudgment(candidate_id="c1", relevant=True, evidence=["나트륨이 많은 가공식품과 국물 섭취를 줄이도록 권고한다."]),
+            CandidateJudgment(candidate_id="c2", relevant=False, evidence=[])])
+
+    items = collect(CHUNKS, QUERIES, LABELS, [[0, 1, 2]], k=3)
+    cache = tmp_path / "j.json"
+    judgments = judge_items(items, ask, cache)
+    assert judgments == {"q1": [
+        {"candidate_id": "c1", "relevant": True, "evidence": ["나트륨이 많은 가공식품과 국물 섭취를 줄이도록 권고한다."]},
+        {"candidate_id": "c2", "relevant": False, "evidence": []}]}
+    assert judge_items(items, ask, cache) == judgments and len(calls) == 1  # 이미 판정한 쿼리는 다시 묻지 않는다

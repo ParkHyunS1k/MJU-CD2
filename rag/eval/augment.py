@@ -1,22 +1,24 @@
-"""라벨 보강(spec 5.4절). 새 청킹이 상위에 올린 청크 중 기존 근거가 없는 것만 모아 Claude가 판정하고,
+"""라벨 보강(spec 5.4절). 새 청킹이 상위에 올린 청크 중 기존 근거가 없는 것만 모아 GPT(Codex CLI)가 판정하고,
 검증을 통과한 근거를 labels.jsonl에 더한다. 저장소 루트에서
 
     python -m rag.eval.augment collect --chunker paragraph --out rag/eval/data/augment_paragraph.json
-    (Claude 서브에이전트가 items를 읽고 judgments JSON을 쓴다)
+    python -m rag.eval.augment judge --chunker paragraph --items ... --judgments ...   (GPT, Codex CLI)
     python -m rag.eval.augment apply --chunker paragraph --items ... --judgments ...
 """
 
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from rag.eval.evaluate import find_evidence
 from rag.eval.export_labels import _MIN_EVIDENCE_CHARS, _nonspecific
+from rag.eval.judge import judge_query
 from rag.eval.metrics import compact
 
 _FIELDS = ("content_hash", "doc_id", "page_start", "page_end", "content")
-SOURCE = "llm-claude"
+SOURCE = "llm-gpt"
 
 
 def collect(chunks: list[dict], queries: list[dict], labels: dict[str, list[dict]], rankings: list[list[int]],
@@ -30,6 +32,19 @@ def collect(chunks: list[dict], queries: list[dict], labels: dict[str, list[dict
             items.append({"query_id": q["query_id"], "text": q["text"], "candidates": [
                 {"candidate_id": f"c{n}", **{f: chunks[i][f] for f in _FIELDS}} for n, i in enumerate(new, 1)]})
     return items
+
+
+def judge_items(items: list[dict], ask: Callable, cache: Path) -> dict[str, list[dict]]:
+    """쿼리마다 한 번 판정(rag.eval.judge.judge_query: 원문에 없는 근거는 버림). 쿼리마다 저장해 끊겨도 이어서 한다."""
+    judgments = json.loads(cache.read_text(encoding="utf-8")) if cache.exists() else {}
+    for item in items:
+        if item["query_id"] in judgments:
+            continue
+        result = judge_query(ask, item["text"], item["candidates"])
+        judgments[item["query_id"]] = [{"candidate_id": c["candidate_id"], **result[c["content_hash"]]}
+                                       for c in item["candidates"] if result[c["content_hash"]]["relevant"] is not None]
+        cache.write_text(json.dumps(judgments, ensure_ascii=False, indent=1), encoding="utf-8")
+    return judgments
 
 
 def apply_judgments(items: list[dict], judgments: dict[str, list[dict]], labels: dict[str, list[dict]],
@@ -67,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     from rag.eval import run
 
     parser = argparse.ArgumentParser(description="라벨 보강: 새 청킹의 상위 결과 중 라벨 없는 청크 판정")
-    parser.add_argument("action", choices=["collect", "apply"])
+    parser.add_argument("action", choices=["collect", "judge", "apply"])
     parser.add_argument("--chunker", required=True)
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--out", type=Path)
@@ -86,6 +101,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     items = json.loads(args.items.read_text(encoding="utf-8"))
+    if args.action == "judge":
+        from rag.eval.judge import codex_ask
+
+        judgments = judge_items(items, codex_ask(), args.judgments)
+        print(f"{args.judgments}: {len(judgments)}/{len(items)} queries judged")
+        return 0
     judgments = json.loads(args.judgments.read_text(encoding="utf-8"))
     rows, stats = apply_judgments(items, judgments, ctx.labels, [c["content"] for c in chunks])
     with run.LABELS.open("a", encoding="utf-8") as f:
