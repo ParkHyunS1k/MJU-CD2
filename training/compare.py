@@ -34,7 +34,8 @@ MIN_POS = 10
 KEYS = ("hypertension", "diabetes", "cholesterol", "triglyceride")
 MODEL = "gpt-5.6-luna"
 REPEATS = 5
-REPEAT_N = 300
+AUROC_N = 500    # 5시간 한도 때문에 전원 대신 무작위 표본(2026-10-13 시범: 20회에 4%)
+REPEAT_N = 40
 CACHE = ROOT / "output" / "llm" / f"{MODEL}.jsonl"
 SCHEMA = {"type": "object", "additionalProperties": False, "required": list(KEYS),
           "properties": {k: {"type": "integer", "minimum": 0, "maximum": 100} for k in KEYS}}
@@ -42,6 +43,8 @@ _TMP = Path(tempfile.gettempdir()) / "compare-codex"
 _WORKDIR = _TMP / "empty"     # Codex 작업 폴더: 비워 둔다
 _IO = _TMP / "io"             # 스키마와 응답 파일
 _SCHEMA_PATH = _IO / "schema.json"
+_INSTR_PATH = _IO / "instructions.md"
+INSTRUCTIONS = "You are a helpful assistant. Answer the user's question directly."  # Codex 에이전트 지시문 대신(토큰 23k→14k)
 _setup_lock = threading.Lock()
 PROMPT = """당신은 의료 위험도를 추정하는 도우미입니다.
 아래 사람의 정보만으로, 이 사람이 현재 각 질환에 해당할 확률을 0-100 정수로 답하세요.
@@ -202,6 +205,10 @@ class CodexError(RuntimeError):
     pass
 
 
+class UsageLimitError(RuntimeError):
+    """요금제 사용량 한도. 재시도해도 소용없으니 실행을 멈춘다."""
+
+
 def call_codex(prompt: str) -> tuple[str, int | None]:
     """codex exec 1회. 사용자 설정을 끄고 빈 폴더에서 stdin을 닫고 실행한다(닫지 않으면 멈춘다)."""
     with _setup_lock:  # 여러 스레드가 동시에 스키마를 쓰지 않게 한다
@@ -209,10 +216,12 @@ def call_codex(prompt: str) -> tuple[str, int | None]:
             _WORKDIR.mkdir(parents=True, exist_ok=True)
             _IO.mkdir(parents=True, exist_ok=True)
             _SCHEMA_PATH.write_text(json.dumps(SCHEMA), encoding="utf-8")
+            _INSTR_PATH.write_text(INSTRUCTIONS, encoding="utf-8")
     schema = _SCHEMA_PATH
     out = _IO / f"{uuid.uuid4().hex}.txt"
     r = subprocess.run(
         ["codex", "exec", "--ignore-user-config", "-m", MODEL, "-c", "model_reasoning_effort=low",
+         "-c", f'model_instructions_file="{_INSTR_PATH}"',
          "-s", "read-only", "--skip-git-repo-check", "--ephemeral",
          "--output-schema", str(schema), "-o", str(out), prompt],
         cwd=_WORKDIR, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
@@ -232,6 +241,8 @@ def ask(prompt: str, caller, attempts: int = 3) -> dict:
             text, tokens = caller(prompt)
         except (CodexError, subprocess.TimeoutExpired) as e:
             err = str(e)
+            if "usage limit" in err.lower():
+                raise UsageLimitError(err) from e
             time.sleep(30 if "capacity" in err else 5)
             continue
         probs = parse_response(text)
@@ -261,10 +272,18 @@ def run_llm(tasks: list[tuple[int, int]], X: pd.DataFrame, cache_path: Path, cal
     todo = [t for t in tasks if t not in done]
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     lock = threading.Lock()
+    stop = threading.Event()
 
     def work(task):
+        if stop.is_set():
+            return
         idx, rep = task
-        rec = {"idx": int(idx), "rep": int(rep), **ask(build_prompt(X.loc[idx]), caller)}
+        try:
+            result = ask(build_prompt(X.loc[idx]), caller)
+        except UsageLimitError:
+            stop.set()
+            raise
+        rec = {"idx": int(idx), "rep": int(rep), **result}
         with lock, cache_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
@@ -293,7 +312,7 @@ def pilot_summary(cache: dict, tasks) -> str:
 def build_results(preds: dict[str, pd.DataFrame], cache: dict | None, rep_ids: list[int]) -> dict:
     res = {"date": date.today().isoformat(), "llm": None, "diseases": {}}
     if cache is not None:
-        res["llm"] = {"model": MODEL, "calls": len(cache), "failed": sum(r["probs"] is None for r in cache.values()),
+        res["llm"] = {"model": MODEL, "calls": len(cache), "auroc_people": sum(rep == 0 for _, rep in cache), "failed": sum(r["probs"] is None for r in cache.values()),
                       "repeat_people": len(rep_ids), "prompt_example": build_prompt(EXAMPLE)}
     for key, pred in preds.items():
         if cache is None:
@@ -322,6 +341,8 @@ def write_report(results: dict, path: Path) -> None:
     L = [f"# 위험 예측 방식 비교 ({results['date']})", "",
          "설계: `docs/superpowers/specs/2026-10-13-model-comparison-design.md`. "
          "19–59세 학습, 25–44세 바깥 5-fold 예측. 모든 모델이 같은 사람을 평가한다.", "",
+         *([f"④를 넣은 비교는 사용량 한도 때문에 25–44세에서 무작위로 뽑은 {results['llm']['auroc_people']}명(GPT 1회차 응답이 있는 사람)만 쓴다. "
+             "⓪–③의 전원(약 2,900명) 결과는 `compare-YYYY-MM-DD.md`(1단계 보고서)에 있다.", ""] if results["llm"] else []),
          "## 요약 (AUROC, 95% CI)", "",
          "| 질환 | n / 양성 | " + " | ".join(NAMES[m] for m in ms) + " |",
          "|---|---|" + "---|" * len(ms)]
@@ -392,6 +413,7 @@ def main(argv: list[str] | None = None) -> None:
     if not args.skip_llm:
         ids = sorted(int(i) for i in set().union(*(p.index for p in preds.values())))
         rng = np.random.default_rng(SEED)
+        ids = sorted(int(i) for i in rng.choice(ids, min(AUROC_N, len(ids)), replace=False))
         rep_ids = sorted(int(i) for i in rng.choice(ids, min(REPEAT_N, len(ids)), replace=False))
         tasks = [(i, 0) for i in ids] + [(i, r) for i in rep_ids for r in range(1, REPEATS)]
         X = build_features(df.loc[ids])
@@ -404,12 +426,13 @@ def main(argv: list[str] | None = None) -> None:
             return
 
     results = build_results(preds, cache, rep_ids)
+    tag = "compare" if cache is None else "compare-llm"  # 1단계(전원) 보고서를 덮어쓰지 않는다
     REPORTS.mkdir(parents=True, exist_ok=True)
-    (REPORTS / "compare-metrics.json").write_text(
+    (REPORTS / f"{tag}-metrics.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2, default=_json_default), encoding="utf-8")
     if cache is not None:
         plot_consistency(preds, cache, rep_ids, REPORTS / "figures" / "llm_consistency.png")
-    path = REPORTS / f"compare-{results['date']}.md"
+    path = REPORTS / f"{tag}-{results['date']}.md"
     write_report(results, path)
     print(f"보고서: {path}")
 

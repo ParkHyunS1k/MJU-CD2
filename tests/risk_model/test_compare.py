@@ -201,3 +201,16 @@ def test_pilot_summary_counts():
              (2, 0): {"idx": 2, "rep": 0, "probs": None, "error": "parse", "tokens": None, "seconds": 9.0}}
     s = pilot_summary(cache, [(1, 0), (2, 0)])
     assert "성공 1/2" in s and "20,000" in s
+
+
+def test_run_llm_stops_on_usage_limit(tmp_path):
+    calls = []
+
+    def limited(prompt):
+        calls.append(prompt)
+        raise cmp.CodexError("ERROR: You've hit your usage limit. Try again later.")
+
+    cache = tmp_path / "c.jsonl"
+    with pytest.raises(cmp.UsageLimitError):
+        run_llm([(10, 0), (11, 0), (10, 1)], _people(), cache, caller=limited, workers=1)
+    assert len(calls) == 1 and load_cache(cache) == {}
