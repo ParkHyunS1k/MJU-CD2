@@ -160,9 +160,10 @@ def parse_response(text: str) -> dict[str, float] | None:
 
 
 def with_llm(pred: pd.DataFrame, cache: dict, key: str) -> tuple[pd.DataFrame, int]:
-    """1회차 GPT 확률을 붙인다. 실패·누락인 사람은 모든 모델 비교에서 뺀다."""
+    """1회차를 호출한 사람(표본)만 남기고 GPT 확률을 붙인다. 1회차가 실패한 사람은 누락으로 세고 모든 모델 비교에서 뺀다."""
+    sampled = {i for (i, rep) in cache if rep == 0}
     p = pd.Series({i: r["probs"][key] for (i, rep), r in cache.items() if rep == 0 and r["probs"]}, dtype=float)
-    out = pred.assign(llm=p.reindex(pred.index))
+    out = pred[pred.index.isin(sampled)].assign(llm=lambda d: p.reindex(d.index))
     missing = int(out.llm.isna().sum())
     return out.dropna(subset=["llm"]), missing
 
@@ -340,7 +341,8 @@ def _model_row(m: str, x: dict) -> str:
     brier = _ci(x["brier"], 4) if "brier" in x else "해당 없음"
     mean = _pct(x["mean_pred"]) if "mean_pred" in x else "해당 없음"
     at = x["at_spec"]
-    sens = f"{_pct(at['sensitivity'])} ({_pct(at['sensitivity_ci'][0])}–{_pct(at['sensitivity_ci'][1])})"
+    sens = (f"{_pct(at['sensitivity'])} ({_pct(at['sensitivity_ci'][0])}–{_pct(at['sensitivity_ci'][1])})"
+            f" / 특이도 {_pct(at['specificity'])}")
     return f"| {NAMES[m]} | {_ci(x['auroc'])} | {diff} | {_ci(x['auprc'])} | {brier} | {mean} | {sens} |"
 
 
@@ -349,8 +351,9 @@ def write_report(results: dict, path: Path) -> None:
     L = [f"# 위험 예측 방식 비교 ({results['date']})", "",
          "설계: `docs/superpowers/specs/2026-10-13-model-comparison-design.md`. "
          "19–59세 학습, 25–44세 바깥 5-fold 예측. 모든 모델이 같은 사람을 평가한다.", "",
-         *([f"④를 넣은 비교는 사용량 한도 때문에 25–44세에서 무작위로 뽑은 {results['llm']['auroc_people']}명(GPT 1회차 응답이 있는 사람)만 쓴다. "
-             "⓪–③의 전원(약 2,900명) 결과는 `compare-YYYY-MM-DD.md`(1단계 보고서)에 있다.", ""] if results["llm"] else []),
+         *([f"④를 넣은 비교는 사용량 한도 때문에 25–44세에서 무작위로 뽑은 {results['llm']['auroc_people']}명만 쓴다. "
+             "질환별 n이 이보다 작은 것은 그 질환의 라벨(예: 중성지방은 12시간 공복)이 없는 사람과 GPT 1회차 실패자를 뺐기 때문이다. "
+             f"⓪–③의 전원(약 2,900명) 결과는 `compare-{results['date']}.md`(1단계 보고서)에 있다.", ""] if results["llm"] else []),
          "## 요약 (AUROC, 95% CI)", "",
          "| 질환 | n / 양성 | " + " | ".join(NAMES[m] for m in ms) + " |",
          "|---|---|" + "---|" * len(ms)]
@@ -360,8 +363,9 @@ def write_report(results: dict, path: Path) -> None:
     for key, r in results["diseases"].items():
         L += ["", f"## {DISEASES[key]} (`{key}`)", "",
               f"실제 유병률 {_pct(r['prevalence'])}. 민감도는 ②의 '보통 이상' 판정 특이도"
-              f"({_pct(r['models']['lr']['at_spec']['specificity'])})에 맞춘 지점이다.", "",
-              "| 모델 | AUROC | ② 대비 AUROC 차이 | AUPRC | Brier | 평균 예측 | 민감도 |",
+              f"({_pct(r['models']['lr']['at_spec']['specificity'])}) 이상이 되는 가장 낮은 기준값의 값이다. "
+              "정수 점수(①, ④)는 동점 때문에 실제 특이도가 목표보다 높을 수 있어 함께 적는다.", "",
+              "| 모델 | AUROC | ② 대비 AUROC 차이 | AUPRC | Brier | 평균 예측 | 민감도 / 실제 특이도 |",
               "|---|---|---|---|---|---|---|"]
         L += [_model_row(m, r["models"][m]) for m in ms]
         L += ["", "| 하위군 | n / 양성 | " + " | ".join(NAMES[m] for m in ms) + " |",
@@ -386,10 +390,10 @@ def write_report(results: dict, path: Path) -> None:
                      f"{c['range_median']:.1f} / {c['range_max']:.1f} | {_pct(c['flip_rate'])} |")
         L += ["", "![consistency](figures/llm_consistency.png)", "",
               "## 한계", "",
-              f"- GPT 호출 {info['calls']}회 중 실패 {info['failed']}회. 1회차가 실패한 사람"
+              f"- GPT 응답 기록 {info['calls']}건(사람·반복별 최종 기록) 중 실패 {info['failed']}건. 1회차가 실패한 사람"
               f"({', '.join(f'{DISEASES[k]} {r["llm_missing"]}명' for k, r in results['diseases'].items())})은 "
               "모든 모델의 비교에서 뺐다.",
-              "- Codex CLI는 에이전트 시스템 프롬프트를 붙인다. 일반 ChatGPT 대화와 조건이 같지 않다.",
+              "- Codex 에이전트 지시문은 짧은 지시문으로 바꿨지만 도구 정의 등은 여전히 붙는다. 일반 ChatGPT 대화와 조건이 완전히 같지는 않다.",
               "- 프롬프트는 아래 1개로 고정했다. 이 실험은 LLM의 상한이 아니라, 같은 정보로 일반적인 질문을 했을 때를 측정한다.",
               "- KNHANES 참가자의 입력 7개(ID·연도·라벨 제외)를 외부 LLM으로 보냈다. 이용약관 판단은 사용자가 했다(2026-10-13).",
               "- 단면 자료라서 '현재 유병일 확률'을 비교한 것이다.",
@@ -428,7 +432,8 @@ def main(argv: list[str] | None = None) -> None:
         if args.limit:
             tasks = tasks[:args.limit]
         run_llm(tasks, X, CACHE, workers=args.workers)
-        cache = load_cache(CACHE)
+        wanted = set(tasks)
+        cache = {t: r for t, r in load_cache(CACHE).items() if t in wanted}  # 이번 표본·설정 밖 기록은 쓰지 않는다
         if args.limit:
             print(pilot_summary(cache, tasks))
             return

@@ -112,7 +112,8 @@ def test_with_llm_drops_missing_rows(knhanes_like):
     cache[(int(first), 0)] = _rec(int(first), 0, None)
     del cache[(int(second), 0)]
     out, missing = with_llm(pred, cache, "hypertension")
-    assert missing == 2 and first not in out.index and second not in out.index
+    # first: 표본이지만 실패 → 누락 1명. second: 호출 대상(표본)이 아님 → 누락으로 세지 않는다
+    assert missing == 1 and first not in out.index and second not in out.index
     assert len(out) == len(pred) - 2
 
 
@@ -227,3 +228,30 @@ def test_codex_files_written_even_if_schema_exists(tmp_path, monkeypatch):
     assert (io / "instructions.md").read_text(encoding="utf-8") == cmp.INSTRUCTIONS
     assert _json.loads((io / "schema.json").read_text(encoding="utf-8")) == cmp.SCHEMA
     assert (tmp_path / "empty").is_dir()
+
+
+def test_report_shows_actual_specificity(knhanes_like, tmp_path):
+    preds = {"hypertension": disease_predictions(knhanes_like, "hypertension", False)}
+    res = build_results(preds, None, [])
+    write_report(res, tmp_path / "c.md")
+    text = (tmp_path / "c.md").read_text(encoding="utf-8")
+    spec = res["diseases"]["hypertension"]["models"]["rule"]["at_spec"]["specificity"]
+    assert "실제 특이도" in text and f"특이도 {100 * spec:.1f}%" in text
+
+
+def test_run_llm_stops_when_interrupted(tmp_path):
+    """Ctrl-C는 메인 스레드에 온다. 그 뒤로 남은 호출을 하지 않아야 한다."""
+    import _thread
+    import time as _time
+    calls = []
+
+    def interrupted(prompt):
+        calls.append(prompt)
+        if len(calls) == 1:
+            _thread.interrupt_main()
+            _time.sleep(0.3)
+        return '{"hypertension": 20, "diabetes": 5, "cholesterol": 10, "triglyceride": 12}', 1
+
+    with pytest.raises(KeyboardInterrupt):
+        run_llm([(10, 0), (11, 0), (10, 1)], _people(), tmp_path / "c.jsonl", caller=interrupted, workers=1)
+    assert len(calls) == 1

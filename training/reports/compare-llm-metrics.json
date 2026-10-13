@@ -212,7 +212,7 @@
           }
         }
       },
-      "llm_missing": 2399,
+      "llm_missing": 0,
       "consistency": {
         "n": 40,
         "sd_median": 1.643167672515498,
@@ -445,7 +445,7 @@
           }
         }
       },
-      "llm_missing": 2332,
+      "llm_missing": 0,
       "consistency": {
         "n": 40,
         "sd_median": 1.3416407864998738,
@@ -658,7 +658,7 @@
           }
         }
       },
-      "llm_missing": 2329,
+      "llm_missing": 0,
       "consistency": {
         "n": 40,
         "sd_median": 0.5477225575051661,
@@ -891,7 +891,7 @@
           }
         }
       },
-      "llm_missing": 2095,
+      "llm_missing": 0,
       "consistency": {
         "n": 40,
         "sd_median": 1.3416407864998738,
