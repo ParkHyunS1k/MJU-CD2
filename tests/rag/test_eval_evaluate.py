@@ -90,3 +90,14 @@ def test_pick_unpaired_when_queries_differ():
     b = _row("question", [0.0] * 10, [f"q{i}" for i in range(10)])
     assert pick([b, a], "m")["name"] == "keyword"
     assert "per_query" not in table([a])
+
+
+def test_budget_fills_with_truncated_last_chunk():
+    early = {"doc_id": "a", "content": EVIDENCE + "가" * 2000}
+    late = {"doc_id": "a", "content": "가" * 2000 + EVIDENCE}
+    filler = {"doc_id": "z", "content": "나" * 3000}
+    queries = [{"query_id": "q1"}]
+    hit = evaluate([filler, early], queries, LABELS, [[0, 1]])[0]
+    miss = evaluate([filler, late], queries, LABELS, [[0, 1]])[0]
+    assert hit["recall@budget"] == 1.0 and hit["ev_recall@budget"] == 1.0 and hit["budget_chunks"] == 2.0
+    assert miss["recall@budget"] == 0.0

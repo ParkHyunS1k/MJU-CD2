@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from rag.eval.metrics import (bootstrap_ci, budget_cut, compact, contains_evidence, evidence_coverage,
+from rag.eval.metrics import (bootstrap_ci, compact, contains_evidence, evidence_coverage,
                               query_metrics)
 
 
@@ -40,26 +40,19 @@ def test_contains_evidence_threshold(text, expected):
     assert contains_evidence(text, "하루 소금 섭취량을 5 g 이하로 제한한다.") is expected
 
 
-def test_budget_cut_keeps_first_and_stops_before_overflow():
-    lengths = [1000, 1000, 2000, 500, 3000]
-    assert budget_cut([0, 1, 2, 3], lengths) == [0, 1]
-    assert budget_cut([4, 0, 1], lengths) == [4]
-    assert budget_cut([], lengths) == []
-
-
 def test_query_metrics_values():
     found = {1: {0}, 3: {0, 1}}
-    m = query_metrics([0, 1, 2, 3, 4], found, n_evidence=2, lengths=[1000] * 5, ks=(1, 3, 5))
+    m = query_metrics([0, 1, 2, 3, 4], found, n_evidence=2, ks=(1, 3, 5))
     assert m["recall@1"] == 0.0 and m["recall@3"] == 1.0 and m["recall@5"] == 1.0
     assert m["ev_recall@1"] == 0.0 and m["ev_recall@3"] == 0.5 and m["ev_recall@5"] == 1.0
     assert m["mrr"] == 0.5
     dcg = 1 / math.log2(3) + 1 / math.log2(5)
     assert m["ndcg@10"] == pytest.approx(dcg / (1 + 1 / math.log2(3)))
-    assert m["recall@budget"] == 1.0 and m["ev_recall@budget"] == 0.5 and m["budget_chunks"] == 3.0
+    assert "recall@budget" not in m  # 예산 지표는 청크 본문이 필요해 evaluate()가 계산한다
 
 
 def test_query_metrics_nothing_found():
-    m = query_metrics([0, 1], {5: {0}}, n_evidence=1, lengths=[10] * 6, ks=(1,))
+    m = query_metrics([0, 1], {5: {0}}, n_evidence=1, ks=(1,))
     assert m["recall@1"] == 0.0 and m["mrr"] == 0.0 and m["ndcg@10"] == 0.0
 
 

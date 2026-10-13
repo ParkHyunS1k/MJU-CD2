@@ -4,6 +4,7 @@
 import argparse
 import json
 import logging
+import math
 import sys
 import time
 from pathlib import Path
@@ -11,7 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from rag.eval.embedders import REGISTRY, load
-from rag.eval.evaluate import cell, evaluate, find_evidence, groups, load_eval, pick, preservation, summarize, table
+from rag.eval.evaluate import evaluate, find_evidence, groups, load_eval, pick, preservation, summarize, table
 from rag.eval.search import RERANKERS, BM25Index, dense_rank, reranker, rrf
 from rag.ingest import ingest
 
@@ -116,10 +117,11 @@ def stage1(ctx: Ctx) -> dict:
 
 
 def stage2(ctx: Ctx) -> dict:
-    variants = [(f"{m}자 / 겹침 {o}", {"max_chars": m, "overlap": o})
+    variants = [(f"{m}자 / 겹침 {o}", {"max_chars": m, "overlap": o, "embedding_model": "bge-m3"})
                 for m in (2000, 1200, 600) for o in (0, 150)]
     return run_stage(ctx, "02_chunking", "2단계: 청킹 (BGE-M3, 글자 수 예산 3,600자)", variants,
-                     "recall@budget", note="앞쪽일수록 청크 수가 적다(저장·검색 비용이 작다).")
+                     "recall@budget", note="앞쪽일수록 청크 수가 적다(저장·검색 비용이 작다). "
+                     "예산을 넘는 마지막 청크는 잘라서 담아, 청크 크기와 관계없이 같은 3,600자를 본다.")
 
 
 RERANKER_NAMES = list(RERANKERS)
@@ -147,7 +149,8 @@ def stage3(ctx: Ctx, names: list[str] = EMBEDDINGS) -> dict:
         ctx, "03_embedding", "3단계: 임베딩 모델", [(n, {"embedding_model": n}) for n in names], "ndcg@10",
         extra=lambda cfg, chunks: embedding_info(cfg["embedding_model"], len(chunks), sample),
         note="앞쪽일수록 저장 용량(차원)이 작다. storage_mb는 halfvec(2바이트) 기준. "
-             "gemini의 query_ms는 네트워크 왕복을 포함한다.")
+             "gemini의 query_ms는 네트워크 왕복을 포함한다."
+             + (f" 미실행: {', '.join(m for m in EMBEDDINGS if m not in names)}." if set(names) != set(EMBEDDINGS) else ""))
     save_state({**load_state(), "dimensions": chosen["dims"]})
     return chosen
 
@@ -174,7 +177,7 @@ def choose_threshold(none_top: list[float], hit_scores: list[float], keep: float
     top = max(none_top)
     if hit_scores:
         top = min(top, float(np.quantile(hit_scores, 1 - keep)))
-    return round(top, 4)
+    return math.ceil(top * 1e4) / 1e4  # 내림하면 기준이 된 정답 없는 쿼리가 다시 통과한다
 
 
 def _first_hit_scores(chunks, queries, labels, ranked, sims, k) -> list[float]:
@@ -228,17 +231,18 @@ def stage6(ctx: Ctx) -> dict:
         f"## 임계값 (임베딩 코사인)\n\n- 정답 없는 쿼리 1위 코사인: {', '.join(f'{s:.4f}' for s in none_top)}\n"
         f"- 조정용 첫 정답 청크 코사인 {len(hits)}개 중 90%가 남도록 상한을 둠\n\n**선택: {threshold}**")
 
-    # 4) 시험용 보고 (임계값 적용 전/후)
-    ranked_t, sims_t = retrieve(state, chunks, texts(test))
-    filtered = [[i for i in r if sims_t[qi, i] > threshold] for qi, r in enumerate(ranked_t)]
-    ks = (final_k, 10)
-    rows = [summarize("임계값 없음", evaluate(chunks, test, ctx.labels, ranked_t, ks),
-                      [f"recall@{final_k}", "ndcg@10", "mrr", f"ev_recall@{final_k}"], ctx.groups),
-            summarize(f"임계값 {threshold}", evaluate(chunks, test, ctx.labels, filtered, ks),
-                      [f"recall@{final_k}", "ndcg@10", "mrr", f"ev_recall@{final_k}"], ctx.groups)]
+    # 4) 시험용 보고: 전체와 선택한 쿼리 형태, 임계값 적용 전/후
+    metrics_t = [f"recall@{final_k}", "ndcg@10", "mrr", f"ev_recall@{final_k}"]
+    test_rows = []
+    for label, qs in (("전체", test), (query_form, [q for q in test if q["form"] == query_form])):
+        ranked_t, sims_t = retrieve(state, chunks, texts(qs))
+        filtered = [[i for i in r if sims_t[qi, i] > threshold] for qi, r in enumerate(ranked_t)]
+        for name, rk in (("임계값 없음", ranked_t), (f"임계값 {threshold}", filtered)):
+            test_rows.append(summarize(f"{label} · {name}", evaluate(chunks, qs, ctx.labels, rk, (final_k, 10)),
+                                       metrics_t, ctx.groups, {"queries": len(qs)}))
     rejected = sum(float(row.max()) <= threshold for row in none_sims)
-    sections.append(f"## 시험용 결과\n\n{table(rows)}\n\n정답 없는 쿼리 {len(none)}개 중 {rejected}개가 "
-                    f"임계값으로 걸러진다. 임계값을 정할 때 이 {len(none)}개를 모두 썼으므로 시험용 검증이 아니다.")
+    sections.append(f"## 시험용 결과\n\n{table(test_rows)}\n\n정답 없는 쿼리 {len(none)}개 중 {rejected}개가 "
+                    f"임계값으로 걸러진다. 임계값을 정할 때 이 {len(none)}개를 모두 썼다.")
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     (RESULTS / "06_operating.md").write_text("# 6단계: 운영값\n\n" + "\n\n".join(sections) + "\n", encoding="utf-8")
@@ -246,12 +250,11 @@ def stage6(ctx: Ctx) -> dict:
         json.dumps({"primary": "ndcg@10", "rows": form_rows}, ensure_ascii=False), encoding="utf-8")
     state = {**state, "query_form": query_form, "final_k": final_k, "threshold": threshold}
     save_state(state)
-    _write_summary(state, rows[1], len(none), rejected)
+    _write_summary(state, test_rows, len(none), rejected)
     return {"name": f"{query_form}, k={final_k}, threshold={threshold}", "cfg": state}
 
 
-def _write_summary(state: dict, test_row: dict, n_none: int, rejected: int) -> None:
-    k = state["final_k"]
+def _write_summary(state: dict, test_rows: list[dict], n_none: int, rejected: int) -> None:
     lines = [
         "# 검색 구성 실험 요약",
         "",
@@ -260,14 +263,18 @@ def _write_summary(state: dict, test_row: dict, n_none: int, rejected: int) -> N
         "| 항목 | 선택 |", "|---|---|",
         *(f"| {key} | {state[key]} |" for key in BASE),
         "",
-        f"시험용 Recall@{k}: {cell(test_row[f'recall@{k}'])}, nDCG@10: {cell(test_row['ndcg@10'])}, "
-        f"사람 검수 쿼리만: {cell(test_row[f'recall@{k} (사람 검수)'])}. "
-        f"정답 없는 쿼리 {n_none}개 중 {rejected}개를 임계값으로 거른다(임계값을 이 쿼리들로 정했으므로 검증된 값은 아니다).",
+        f"## 시험용 결과 (k = {state['final_k']})",
+        "",
+        table(test_rows),
+        "",
+        f"정답 없는 쿼리 {n_none}개 중 {rejected}개를 임계값으로 거른다(임계값을 이 쿼리들로 정했다).",
         "",
         "단계별 근거는 `01_parser.md` … `06_operating.md`. 1등과의 쿼리별 차이(쌍체 부트스트랩 95% 구간)가 0을 포함하면 "
         "더 단순·저렴한 구성을 골랐다.",
         "",
         "## 한계",
+        "- k와 임계값만 조정용으로 정하고 시험용으로 보고했다. 파서·청킹·임베딩·하이브리드·리랭커는 시험용 쿼리까지 "
+        "포함한 전체 쿼리로 골랐으므로(spec 4절) 시험용 수치는 다소 낙관적이다.",
         "- 라벨은 사람 검수 188건 + LLM(GPT) 판정. 사람 검수 쿼리는 고혈압·당뇨·이상지질혈증뿐이라 "
         "\"사람 검수\" 열을 함께 본다.",
         "- 후보 모으기(pooling)로 만든 라벨이라, 어떤 방식도 찾지 못한 정답은 빠져 있다.",

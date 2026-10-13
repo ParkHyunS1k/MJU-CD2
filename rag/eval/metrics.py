@@ -25,19 +25,8 @@ def contains_evidence(text: str, evidence: str, threshold: float = 0.5) -> bool:
     return evidence_coverage(evidence, text) >= threshold
 
 
-def budget_cut(ranked: list[int], lengths: list[int], budget: int = 3600) -> list[int]:
-    """누적 글자 수가 budget을 넘기 전까지의 상위 결과. 첫 결과는 항상 담는다."""
-    out, total = [], 0
-    for i in ranked:
-        if out and total + lengths[i] > budget:
-            break
-        out.append(i)
-        total += lengths[i]
-    return out
-
-
-def query_metrics(ranked: list[int], found: dict[int, set[int]], n_evidence: int, lengths: list[int],
-                  ks=(1, 3, 5, 10, 20), budget: int = 3600) -> dict[str, float]:
+def query_metrics(ranked: list[int], found: dict[int, set[int]], n_evidence: int,
+                  ks=(1, 3, 5, 10, 20)) -> dict[str, float]:
     """found: 청크 번호 → 그 청크가 담은 근거 번호. 관련 청크 = found에 있는 청크."""
 
     def ev(top: list[int]) -> float:
@@ -53,10 +42,6 @@ def query_metrics(ranked: list[int], found: dict[int, set[int]], n_evidence: int
     dcg = sum(1 / math.log2(r + 2) for r, i in enumerate(ranked[:10]) if i in found)
     idcg = sum(1 / math.log2(r + 2) for r in range(min(10, len(found))))
     out["ndcg@10"] = dcg / idcg if idcg else 0.0
-    cut = budget_cut(ranked, lengths, budget)
-    out["recall@budget"] = float(any(i in found for i in cut))
-    out["ev_recall@budget"] = ev(cut)
-    out["budget_chunks"] = float(len(cut))
     return out
 
 

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import numpy as np
 
@@ -108,3 +110,19 @@ def test_cache_keeps_finished_batches_when_inner_fails(tmp_path):
     inner = RecordingEmbedder()
     CachedEmbedder(inner, tmp_path, batch=2).encode(texts, "doc")
     assert inner.seen == [["문장2", "문장3"], ["문장4"]]
+
+
+def test_cache_write_failure_keeps_previous_cache(tmp_path, monkeypatch):
+    CachedEmbedder(RecordingEmbedder(), tmp_path).encode(["가"], "doc")
+
+    def broken_savez(file, **arrays):
+        Path(file).write_bytes(b"partial zip")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(np, "savez", broken_savez)
+    with pytest.raises(KeyboardInterrupt):
+        CachedEmbedder(RecordingEmbedder(), tmp_path).encode(["나"], "doc")
+    monkeypatch.undo()
+    inner = RecordingEmbedder()
+    CachedEmbedder(inner, tmp_path).encode(["가"], "doc")
+    assert inner.seen == []

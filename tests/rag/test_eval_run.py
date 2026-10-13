@@ -72,8 +72,9 @@ def test_stage1_writes_results_and_state(ctx):
 def test_stage2_varies_chunking(ctx):
     run.stage2(ctx)
     saved = json.loads((run.RESULTS / "02_chunking.json").read_text())
-    assert [r["cfg"] for r in saved["rows"]][:2] == [{"max_chars": 2000, "overlap": 0},
-                                                     {"max_chars": 2000, "overlap": 150}]
+    assert [r["cfg"] for r in saved["rows"]][:2] == [
+        {"max_chars": 2000, "overlap": 0, "embedding_model": "bge-m3"},
+        {"max_chars": 2000, "overlap": 150, "embedding_model": "bge-m3"}]
     assert json.loads(run.STATE.read_text())["max_chars"] == 2000
 
 
@@ -131,6 +132,8 @@ def test_stage6_writes_operating_values_and_summary(ctx):
     assert "쿼리 형태" in md and "최종 k" in md and "임계값" in md and "시험용" in md
     summary = (run.RESULTS / "summary.md").read_text()
     assert "selected.json" in summary and "사람 검수" in summary
+    assert "영문 근거" in summary and "| keyword · 임계값" in summary
+    assert "시험용 쿼리까지" in summary
 
 
 def test_stage3_runs_only_named_models(ctx, monkeypatch):
@@ -138,6 +141,8 @@ def test_stage3_runs_only_named_models(ctx, monkeypatch):
     run.stage3(ctx, ["bge-m3", "kure-v1"])
     rows = json.loads((run.RESULTS / "03_embedding.json").read_text())["rows"]
     assert [r["name"] for r in rows] == ["bge-m3", "kure-v1"]
+    md = (run.RESULTS / "03_embedding.md").read_text()
+    assert "미실행" in md and "gemini-3072" in md
 
 
 def test_cli_passes_embedding_subset(monkeypatch):
@@ -157,3 +162,7 @@ def test_embedding_info_survives_unmeasurable_latency(ctx, monkeypatch):
     monkeypatch.setattr(run, "REGISTRY", {"gemini-768": QuotaEmbedder})
     info = run.embedding_info("gemini-768", 4, ["소금"])
     assert info["dims"] == 64 and info["query_ms"] == "n/a"
+
+
+def test_choose_threshold_never_rounds_below_unanswerable_score():
+    assert run.choose_threshold([0.70684], []) >= 0.70684

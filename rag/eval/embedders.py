@@ -1,6 +1,7 @@
 """비교할 임베딩 모델들. 모두 encode(texts, kind) -> 행 정규화 행렬 형태로 맞춘다."""
 
 import hashlib
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -41,7 +42,9 @@ class CachedEmbedder:
             part = todo[i : i + self.batch]
             store.update(zip(map(_text_key, part), self.inner.encode(part, kind)))
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-            np.savez(path, keys=np.array(list(store)), vectors=np.stack(list(store.values())))
+            tmp = path.with_suffix(".tmp.npz")  # 쓰다 끊겨도 기존 캐시는 남도록 바꿔치기한다
+            np.savez(tmp, keys=np.array(list(store)), vectors=np.stack(list(store.values())))
+            os.replace(tmp, path)
         return np.stack([store[k] for k in keys])
 
 

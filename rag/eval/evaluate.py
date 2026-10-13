@@ -51,14 +51,31 @@ def preservation(chunks: list[dict], queries: list[dict], labels: dict[str, list
     return kept / total
 
 
+def budget_found(chunks: list[dict], labels: list[dict], ranked: list[int], budget: int) -> tuple[set[int], int]:
+    """상위 결과를 누적 budget 글자까지 담는다(넘치는 마지막 청크는 잘라 담는다). (찾은 근거 번호, 담은 청크 수)."""
+    found, left, used = set(), budget, 0
+    for i in ranked:
+        if left <= 0:
+            break
+        text = chunks[i]["content"][:left]
+        left -= len(chunks[i]["content"])
+        used += 1
+        for ei, label in enumerate(labels):
+            if chunks[i]["doc_id"] == label["doc_id"] and contains_evidence(text, label["evidence"]):
+                found.add(ei)
+    return found, used
+
+
 def evaluate(chunks: list[dict], queries: list[dict], labels: dict[str, list[dict]],
-             rankings: list[list[int]], ks=_KS) -> list[dict]:
-    lengths = [len(c["content"]) for c in chunks]
+             rankings: list[list[int]], ks=_KS, budget: int = 3600) -> list[dict]:
     out = []
     for q, ranked in zip(queries, rankings, strict=True):
         qlabels = labels[q["query_id"]]
         found = find_evidence(chunks, qlabels)
-        out.append({"query_id": q["query_id"], **query_metrics(ranked, found, len(qlabels), lengths, ks)})
+        in_budget, used = budget_found(chunks, qlabels, ranked, budget)
+        out.append({"query_id": q["query_id"], **query_metrics(ranked, found, len(qlabels), ks),
+                    "recall@budget": float(bool(in_budget)), "ev_recall@budget": len(in_budget) / len(qlabels),
+                    "budget_chunks": float(used)})
     return out
 
 
