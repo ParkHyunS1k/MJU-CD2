@@ -1,0 +1,13 @@
+{
+  "parser": "pymupdf",
+  "spacing": false,
+  "max_chars": 1200,
+  "overlap": 0,
+  "embedding_model": "gemini-768",
+  "dimensions": 768,
+  "hybrid": false,
+  "reranker": null,
+  "query_form": "keyword",
+  "final_k": 2,
+  "threshold": 0.7069
+}
