@@ -25,7 +25,7 @@ RESULTS = Path("rag/eval/results")
 STATE = Path("rag/eval/selected.json")
 DEPTH = 20  # 지표는 상위 20개까지 본다
 POOL = 100  # 하이브리드로 합치기 전 각 방식에서 가져오는 수
-BASE = {"parser": "pymupdf", "spacing": False, "max_chars": 1200, "overlap": 150,
+BASE = {"parser": "pymupdf", "spacing": False, "chunker": "chars", "max_chars": 1200, "overlap": 150,
         "embedding_model": "bge-m3", "dimensions": None, "hybrid": False, "reranker": None,
         "query_form": None, "final_k": None, "threshold": None}
 METRICS = ["ndcg@10", "recall@3", "recall@20", "mrr", "recall@budget", "ev_recall@budget"]
@@ -40,10 +40,11 @@ def save_state(state: dict) -> None:
     STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def chunk_variant(parser: str, spacing: bool, max_chars: int, overlap: int) -> list[dict]:
-    path = VARIANTS / f"{parser}-{'spaced' if spacing else 'raw'}-{max_chars}-{overlap}.jsonl"
+def chunk_variant(parser: str, spacing: bool, max_chars: int, overlap: int, chunker: str = "chars") -> list[dict]:
+    suffix = "" if chunker == "chars" else f"-{chunker}"
+    path = VARIANTS / f"{parser}-{'spaced' if spacing else 'raw'}-{max_chars}-{overlap}{suffix}.jsonl"
     if not path.exists():
-        records, stats = ingest(SOURCES, RAW, max_chars, overlap, parser, spacing)
+        records, stats = ingest(SOURCES, RAW, max_chars, overlap, parser, spacing, chunker=chunker)
         log.info("%s: %s", path.name, json.dumps(stats, ensure_ascii=False))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records), encoding="utf-8")
@@ -51,7 +52,7 @@ def chunk_variant(parser: str, spacing: bool, max_chars: int, overlap: int) -> l
 
 
 def chunks_for(state: dict) -> list[dict]:
-    return chunk_variant(state["parser"], state["spacing"], state["max_chars"], state["overlap"])
+    return chunk_variant(state["parser"], state["spacing"], state["max_chars"], state["overlap"], state["chunker"])
 
 
 def retrieve(state: dict, chunks: list[dict], texts: list[str]) -> tuple[list[list[int]], np.ndarray]:
@@ -117,8 +118,11 @@ def stage1(ctx: Ctx) -> dict:
 
 
 def stage2(ctx: Ctx) -> dict:
-    variants = [(f"{m}자 / 겹침 {o}", {"max_chars": m, "overlap": o, "embedding_model": "bge-m3"})
-                for m in (2000, 1200, 600) for o in (0, 150)]
+    chars = lambda m, o: (f"{m}자 / 겹침 {o}", {"chunker": "chars", "max_chars": m, "overlap": o, "embedding_model": "bge-m3"})
+    paragraph = lambda name, chunker: (name, {"chunker": chunker, "max_chars": 1200, "overlap": 0, "embedding_model": "bge-m3"})
+    # 앞쪽일수록 청크 수가 적다. 문단 묶기는 같은 크기의 글자 수 방식 바로 뒤, 문단 하나씩은 청크가 가장 많아 맨 뒤
+    variants = [chars(2000, 0), chars(2000, 150), chars(1200, 0), paragraph("문단 묶기 1200자", "paragraph"),
+                chars(1200, 150), chars(600, 0), chars(600, 150), paragraph("문단 하나씩", "paragraph-single")]
     return run_stage(ctx, "02_chunking", "2단계: 청킹 (BGE-M3, 글자 수 예산 3,600자)", variants,
                      "recall@budget", note="앞쪽일수록 청크 수가 적다(저장·검색 비용이 작다). "
                      "예산을 넘는 마지막 청크는 잘라서 담아, 청크 크기와 관계없이 같은 3,600자를 본다.")

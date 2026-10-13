@@ -8,7 +8,8 @@ import numpy as np
 
 
 def compact(text: str) -> str:
-    return re.sub(r"\s+", "", unicodedata.normalize("NFC", text))
+    # 소프트 하이픈(U+00AD)은 줄바꿈 자리에만 보이는 글자라 지운다
+    return re.sub(r"[\s\u00ad]+", "", unicodedata.normalize("NFC", text))
 
 
 def evidence_coverage(evidence: str, text: str, n: int = 10) -> float:

@@ -62,3 +62,7 @@ def test_bootstrap_ci():
     assert mean == 0.5 and lo < 0.5 < hi
     assert bootstrap_ci([0.0, 1.0] * 25) == (mean, lo, hi)
     assert all(math.isnan(v) for v in bootstrap_ci([]))
+
+
+def test_compact_drops_soft_hyphens():
+    assert compact("per­ formed") == compact("performed")

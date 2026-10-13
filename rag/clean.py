@@ -41,3 +41,42 @@ def clean_blocks(blocks: list[Block], page_heights: list[float], page_widths: li
         and not ((at_edge(block) or at_side(block)) and _PAGE_NUMBER.match(block.text))
         and not (at_edge(block) and _signature(block.text) in repeated)
     ]
+
+
+_REFERENCES_HEADING = re.compile(r"^(참고문헌|references|bibliography)$", re.IGNORECASE)
+_REFERENCE_ENTRY = re.compile(r"^\d{1,3}\.\s+[A-Z][A-Za-z'\-]+\s+[A-Z]{1,3},.*(et al|\d{4};\s*\d+)")
+_HANGUL = re.compile("[가-힣]")
+_LATIN = re.compile("[A-Za-z]")
+
+
+def _mostly_korean(text: str) -> bool:
+    hangul, latin = len(_HANGUL.findall(text)), len(_LATIN.findall(text))
+    return hangul >= 2 and hangul >= 0.3 * (hangul + latin)
+
+
+_BIBLIOGRAPHIC = re.compile(r"\d{4};\s*\d+|et al\.|\b[A-Z][a-z]+ [A-Z]{1,2},")
+_BARE_NUMBERS = re.compile(r"^(\d{1,3}\.\s*)+$")
+
+
+def drop_references(blocks: list[Block]) -> list[Block]:
+    """참고문헌을 뺀다.
+    - 참고문헌 제목 뒤 블록은 한글 본문이 다시 나올 때까지 뺀다.
+    - 한글 문서에서는 위치와 관계없이 영문 서지 블록과 번호만 있는 블록도 뺀다
+      (펼침면 PDF는 읽는 순서가 참고문헌과 본문을 오가서 제목 기준만으로는 부족하다)."""
+    korean_doc = _mostly_korean(" ".join(b.text for b in blocks))
+    out, in_references = [], False
+    for block in blocks:
+        text = re.sub(r"\s+", " ", block.text).strip()
+        if _REFERENCES_HEADING.match(text.replace(" ", "")):
+            in_references = True
+            continue
+        korean = _mostly_korean(text)
+        if in_references and not korean:
+            continue
+        in_references = False
+        if _REFERENCE_ENTRY.match(text):
+            continue
+        if korean_doc and not korean and (_BIBLIOGRAPHIC.search(text) or _BARE_NUMBERS.match(text)):
+            continue
+        out.append(block)
+    return out

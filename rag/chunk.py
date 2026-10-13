@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 
+from rag.paragraphs import merge_paragraphs
 from rag.sections import Section
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
@@ -61,4 +62,26 @@ def chunk_section(section: Section, max_chars: int = 1200, overlap: int = 150) -
 
     if current:
         emit()
+    return chunks
+
+
+def chunk_paragraphs(section: Section, max_chars: int = 1200) -> list[Chunk]:
+    """문단을 max_chars까지 쌓는다. 문단 중간은 자르지 않고, 넘치는 문단만 문장 단위로 나눈다."""
+    return chunk_section(Section(section.heading_path, merge_paragraphs(section.blocks)), max_chars, overlap=0)
+
+
+def chunk_single(section: Section, max_chars: int = 1200, min_chars: int = 80) -> list[Chunk]:
+    """문단 하나가 청크 하나. min_chars 미만 조각(소제목 등)은 다음 문단에 붙인다."""
+    pieces = [c for p in merge_paragraphs(section.blocks)
+              for c in chunk_section(Section(section.heading_path, [p]), max_chars, overlap=0)]
+    chunks, pending = [], []
+    for piece in pieces:
+        pending.append(piece)
+        if sum(len(p.body) for p in pending) >= min_chars:
+            chunks.append(Chunk(list(section.heading_path), pending[0].page_start, pending[-1].page_end,
+                                "\n".join(p.body for p in pending)))
+            pending = []
+    if pending:
+        chunks.append(Chunk(list(section.heading_path), pending[0].page_start, pending[-1].page_end,
+                            "\n".join(p.body for p in pending)))
     return chunks

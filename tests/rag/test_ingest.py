@@ -142,3 +142,21 @@ def test_ingest_rejects_unknown_parser(tmp_path, make_pdf):
     sources = _sources(tmp_path, [_entry("a", "a.pdf")])
     with pytest.raises(KeyError):
         ingest(sources, tmp_path, parser="nope")
+
+
+def test_ingest_drops_reference_list(tmp_path, make_pdf):
+    make_pdf("refs.pdf", [[(100, "포화지방 섭취를 줄인다."), (200, "참고문헌"),
+                           (260, "1. Ference BA, Ginsberg HN, et al. Eur Heart J 2017;38:2459-2472.")]])
+    records, _ = ingest(_sources(tmp_path, [_entry("refs", "refs.pdf")]), tmp_path)
+    assert "Ference" not in records[0]["content"] and "참고문헌" not in records[0]["content"]
+
+
+def test_ingest_paragraph_chunkers(tmp_path, make_pdf):
+    make_pdf("p.pdf", [[(100, "운동은 혈압을 낮추고"), (115, "체중 감량에도 도움이 된다."), (200, "금연도 혈압 관리에 중요하다.")]])
+    sources = _sources(tmp_path, [_entry("p", "p.pdf")])
+    packed, _ = ingest(sources, tmp_path, chunker="paragraph")
+    single, _ = ingest(sources, tmp_path, chunker="paragraph-single")
+    assert len(packed) == 1 and "낮추고 체중" in packed[0]["content"]
+    assert len(single) == 1  # 두 문단 모두 80자 미만이라 하나로 붙는다
+    with pytest.raises(KeyError):
+        ingest(sources, tmp_path, chunker="nope")

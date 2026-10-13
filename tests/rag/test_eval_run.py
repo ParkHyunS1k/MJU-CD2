@@ -73,8 +73,8 @@ def test_stage2_varies_chunking(ctx):
     run.stage2(ctx)
     saved = json.loads((run.RESULTS / "02_chunking.json").read_text())
     assert [r["cfg"] for r in saved["rows"]][:2] == [
-        {"max_chars": 2000, "overlap": 0, "embedding_model": "bge-m3"},
-        {"max_chars": 2000, "overlap": 150, "embedding_model": "bge-m3"}]
+        {"chunker": "chars", "max_chars": 2000, "overlap": 0, "embedding_model": "bge-m3"},
+        {"chunker": "chars", "max_chars": 2000, "overlap": 150, "embedding_model": "bge-m3"}]
     assert json.loads(run.STATE.read_text())["max_chars"] == 2000
 
 
@@ -166,3 +166,20 @@ def test_embedding_info_survives_unmeasurable_latency(ctx, monkeypatch):
 
 def test_choose_threshold_never_rounds_below_unanswerable_score():
     assert run.choose_threshold([0.70684], []) >= 0.70684
+
+
+def test_chunk_variant_name_includes_chunker(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(run, "VARIANTS", tmp_path)
+    monkeypatch.setattr(run, "ingest", lambda *a, **k: (seen.setdefault("args", (a, k)) and [{"content": "x"}], {}))
+    run.chunk_variant("pymupdf", False, 1200, 0, "paragraph")
+    assert (tmp_path / "pymupdf-raw-1200-0-paragraph.jsonl").exists()
+    assert seen["args"][1]["chunker"] == "paragraph"
+    assert run.BASE["chunker"] == "chars"
+
+
+def test_stage2_includes_paragraph_chunkers(ctx):
+    run.stage2(ctx)
+    cfgs = [r["cfg"] for r in json.loads((run.RESULTS / "02_chunking.json").read_text())["rows"]]
+    assert {"chunker": "paragraph", "max_chars": 1200, "overlap": 0, "embedding_model": "bge-m3"} in cfgs
+    assert cfgs[-1]["chunker"] == "paragraph-single"

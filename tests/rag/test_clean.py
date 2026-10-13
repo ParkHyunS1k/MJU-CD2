@@ -59,3 +59,43 @@ def test_removes_footer_repeated_in_one_chapter_of_long_document():
     texts = [b.text for b in clean_blocks(blocks, [H] * 20, [W] * 20)]
     assert "약물치료" not in texts
     assert len(texts) == 20
+
+
+def test_drop_references_after_heading_until_korean_prose():
+    from rag.clean import drop_references
+
+    blocks = [_blk(1, 100, 113, "포화지방 섭취를 줄인다."), _blk(1, 130, 143, "참고문헌"),
+              _blk(1, 150, 163, "1. Ference BA, Ginsberg HN, Graham I, et al. Low density lipoproteins cause"),
+              _blk(1, 170, 183, "2017;38:2459-2472."),
+              _blk(2, 100, 113, "음주 관리"), _blk(2, 130, 143, "과도한 음주는 중성지방을 높인다.")]
+    assert [b.text for b in drop_references(blocks)] == [
+        "포화지방 섭취를 줄인다.", "음주 관리", "과도한 음주는 중성지방을 높인다."]
+
+
+def test_drop_references_removes_headingless_entries():
+    from rag.clean import drop_references
+
+    blocks = [_blk(1, 100, 113, "Kim et al. 연구에서 체중이 줄었다."),
+              _blk(1, 130, 143, "12. Kim KK, Lee JH, Park S, et al. Obesity guideline. J Obes 2023;8:e58.")]
+    assert [b.text for b in drop_references(blocks)] == ["Kim et al. 연구에서 체중이 줄었다."]
+
+
+def test_drop_references_in_korean_doc_even_when_interleaved_with_prose():
+    from rag.clean import drop_references
+
+    blocks = [_blk(1, 100, 113, "알코올 과다 섭취는 당뇨병 발생 위험을 높인다."), _blk(1, 130, 143, "참고문헌"),
+              _blk(1, 150, 163, "근거수준 체계적문헌고찰 결과 소량 음주는 위험과 관련이 없었다."),
+              _blk(2, 74, 85, "15."), _blk(2, 90, 101, "50. 51. 52."),
+              _blk(2, 110, 121, "Hamdy O, Mottalib A, Morsi A, et al. Long-term effect. Diabetes Care 2017;40:1-9."),
+              _blk(2, 130, 141, "Losartan 50 mg qd 25-100 mg")]
+    assert [b.text for b in drop_references(blocks)] == [
+        "알코올 과다 섭취는 당뇨병 발생 위험을 높인다.", "근거수준 체계적문헌고찰 결과 소량 음주는 위험과 관련이 없었다.",
+        "Losartan 50 mg qd 25-100 mg"]
+
+
+def test_drop_references_keeps_english_prose_in_english_doc():
+    from rag.clean import drop_references
+
+    blocks = [_blk(1, 100, 113, "Resistance training improves strength, as Kim et al. reported in 2023."),
+              _blk(1, 130, 143, "References"), _blk(1, 150, 163, "Kim KK, Lee J. Title. J Obes 2023;8:1-9.")]
+    assert [b.text for b in drop_references(blocks)] == [blocks[0].text]
