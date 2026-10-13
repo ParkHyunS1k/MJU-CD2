@@ -36,3 +36,35 @@ def test_consistency_stats():
     assert r["n"] == 2 and r["flip_rate"] == 0.5
     assert r["range_max"] == pytest.approx(20.0) and r["range_median"] == pytest.approx(10.0)
     assert consistency_stats(np.empty((0, 5)), 0.2) == {"n": 0}
+
+
+from training.compare import build_results, compare_disease, disease_predictions, write_report
+
+
+def test_disease_predictions_columns(knhanes_like):
+    pred = disease_predictions(knhanes_like, "hypertension", False)
+    assert list(pred.columns) == ["y", "age", "base", "rule", "lr", "level", "xgb"]
+    assert pred.age.between(25, 44).all() and len(pred) > 0
+    assert set(pred.rule.unique()) <= {0, 1, 2, 3, 4}
+
+
+def test_compare_disease_marks_small_subgroups(knhanes_like):
+    pred = disease_predictions(knhanes_like, "hypertension", False)
+    young = pred.age <= 34
+    pred.loc[young, "y"] = 0.0
+    pred.loc[pred[young].index[:5], "y"] = 1.0   # 25–34세 양성 5명
+    r = compare_disease(pred, ["base", "rule", "lr", "xgb"])
+    assert r["subgroups"]["25-34"]["auroc"]["lr"] is None
+    assert r["subgroups"]["35-44"]["auroc"]["lr"] is not None
+    assert "auroc_diff" not in r["models"]["lr"] and "auroc_diff" in r["models"]["xgb"]
+    assert "brier" not in r["models"]["rule"]
+    assert r["models"]["xgb"]["at_spec"]["specificity"] >= r["models"]["lr"]["at_spec"]["specificity"]
+
+
+def test_report_without_llm(knhanes_like, tmp_path):
+    preds = {"hypertension": disease_predictions(knhanes_like, "hypertension", False)}
+    res = build_results(preds, None, [])
+    out = tmp_path / "compare.md"
+    write_report(res, out)
+    text = out.read_text(encoding="utf-8")
+    assert "## 요약" in text and "② 배포 로지스틱" in text and "④ GPT" not in text
