@@ -92,7 +92,7 @@
 | 당뇨 | 40 | 0.5 / 1.6 | 1.0 / 6.0 | 22.5% |
 | 고중성지방 | 40 | 1.3 / 2.7 | 3.0 / 10.0 | 22.5% |
 
-![consistency](figures/llm_consistency.png)
+![consistency](figures/llm_consistency_gpt-5.6-luna.png)
 
 ## 한계
 

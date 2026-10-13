@@ -255,3 +255,18 @@ def test_run_llm_stops_when_interrupted(tmp_path):
     with pytest.raises(KeyboardInterrupt):
         run_llm([(10, 0), (11, 0), (10, 1)], _people(), tmp_path / "c.jsonl", caller=interrupted, workers=1)
     assert len(calls) == 1
+
+
+def test_llm_paths_are_per_model():
+    a, b = cmp.llm_paths("gpt-5.6-luna"), cmp.llm_paths("gpt-5.6-terra")
+    assert a["cache"].name == "gpt-5.6-luna.jsonl" and b["cache"].name == "gpt-5.6-terra.jsonl"
+    assert b["tag"] == "compare-llm-gpt-5.6-terra" and b["figure"] == "llm_consistency_gpt-5.6-terra.png"
+
+
+def test_report_links_model_figure(knhanes_like, tmp_path):
+    preds = {"hypertension": disease_predictions(knhanes_like, "hypertension", False)}
+    rep_ids = [int(i) for i in preds["hypertension"].index[:10]]
+    res = build_results(preds, _fake_cache(preds, rep_ids), rep_ids, model="m-x")
+    write_report(res, tmp_path / "c.md")
+    assert res["llm"]["model"] == "m-x"
+    assert "figures/llm_consistency_m-x.png" in (tmp_path / "c.md").read_text(encoding="utf-8")

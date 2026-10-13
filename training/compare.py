@@ -32,11 +32,17 @@ ML_MODELS = ["base", "rule", "lr", "xgb"]
 SUBGROUPS = {"25-34": (25, 34), "35-44": (35, 44)}
 MIN_POS = 10
 KEYS = ("hypertension", "diabetes", "cholesterol", "triglyceride")
-MODEL = "gpt-5.6-luna"
+MODEL = "gpt-5.6-luna"   # 기본값. --model로 바꾼다(예: gpt-5.6-terra)
 REPEATS = 5
 AUROC_N = 500    # 5시간 한도 때문에 전원 대신 무작위 표본(2026-10-13 시범: 20회에 4%)
 REPEAT_N = 40
-CACHE = ROOT / "output" / "llm" / f"{MODEL}.jsonl"
+
+
+def llm_paths(model: str) -> dict:
+    """모델마다 캐시·보고서·그림을 따로 둔다. 같은 SEED라 표본은 모델과 무관하게 같다."""
+    return {"cache": ROOT / "output" / "llm" / f"{model}.jsonl",
+            "tag": f"compare-llm-{model}", "figure": f"llm_consistency_{model}.png"}
+
 SCHEMA = {"type": "object", "additionalProperties": False, "required": list(KEYS),
           "properties": {k: {"type": "integer", "minimum": 0, "maximum": 100} for k in KEYS}}
 _TMP = Path(tempfile.gettempdir()) / "compare-codex"
@@ -219,7 +225,7 @@ def _ensure_codex_files() -> None:
     _INSTR_PATH.write_text(INSTRUCTIONS, encoding="utf-8")
 
 
-def call_codex(prompt: str) -> tuple[str, int | None]:
+def call_codex(prompt: str, model: str = MODEL) -> tuple[str, int | None]:
     """codex exec 1회. 사용자 설정을 끄고 빈 폴더에서 stdin을 닫고 실행한다(닫지 않으면 멈춘다)."""
     global _files_ready
     with _setup_lock:  # 프로세스마다 한 번, 다른 스레드가 읽기 전에 쓴다
@@ -229,7 +235,7 @@ def call_codex(prompt: str) -> tuple[str, int | None]:
     schema = _SCHEMA_PATH
     out = _IO / f"{uuid.uuid4().hex}.txt"
     r = subprocess.run(
-        ["codex", "exec", "--ignore-user-config", "-m", MODEL, "-c", "model_reasoning_effort=low",
+        ["codex", "exec", "--ignore-user-config", "-m", model, "-c", "model_reasoning_effort=low",
          "-c", f'model_instructions_file="{_INSTR_PATH}"',
          "-s", "read-only", "--skip-git-repo-check", "--ephemeral",
          "--output-schema", str(schema), "-o", str(out), prompt],
@@ -318,10 +324,10 @@ def pilot_summary(cache: dict, tasks) -> str:
     return "\n".join(L)
 
 
-def build_results(preds: dict[str, pd.DataFrame], cache: dict | None, rep_ids: list[int]) -> dict:
+def build_results(preds: dict[str, pd.DataFrame], cache: dict | None, rep_ids: list[int], model: str = MODEL) -> dict:
     res = {"date": date.today().isoformat(), "llm": None, "diseases": {}}
     if cache is not None:
-        res["llm"] = {"model": MODEL, "calls": len(cache), "auroc_people": sum(rep == 0 for _, rep in cache), "failed": sum(r["probs"] is None for r in cache.values()),
+        res["llm"] = {"model": model, "calls": len(cache), "auroc_people": sum(rep == 0 for _, rep in cache), "failed": sum(r["probs"] is None for r in cache.values()),
                       "repeat_people": len(rep_ids), "prompt_example": build_prompt(EXAMPLE)}
     for key, pred in preds.items():
         if cache is None:
@@ -388,7 +394,7 @@ def write_report(results: dict, path: Path) -> None:
                 continue
             L.append(f"| {DISEASES[key]} | {c['n']} | {c['sd_median']:.1f} / {c['sd_p90']:.1f} | "
                      f"{c['range_median']:.1f} / {c['range_max']:.1f} | {_pct(c['flip_rate'])} |")
-        L += ["", "![consistency](figures/llm_consistency.png)", "",
+        L += ["", f"![consistency](figures/{llm_paths(info['model'])['figure']})", "",
               "## 한계", "",
               f"- GPT 응답 기록 {info['calls']}건(사람·반복별 최종 기록) 중 실패 {info['failed']}건. 1회차가 실패한 사람"
               f"({', '.join(f'{DISEASES[k]} {r["llm_missing"]}명' for k, r in results['diseases'].items())})은 "
@@ -412,7 +418,9 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--skip-llm", action="store_true", help="⓪①②③만 계산한다(1단계)")
     ap.add_argument("--limit", type=int, help="앞의 N회만 호출하고 시범 요약만 출력한다(2단계)")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--model", default=MODEL, help="Codex 모델(예: gpt-5.6-terra)")
     args = ap.parse_args(argv)
+    paths = llm_paths(args.model)
 
     df = load_knhanes()
     spline = _spline_flags()
@@ -431,20 +439,20 @@ def main(argv: list[str] | None = None) -> None:
         X = build_features(df.loc[ids])
         if args.limit:
             tasks = tasks[:args.limit]
-        run_llm(tasks, X, CACHE, workers=args.workers)
+        run_llm(tasks, X, paths["cache"], caller=lambda p: call_codex(p, args.model), workers=args.workers)
         wanted = set(tasks)
-        cache = {t: r for t, r in load_cache(CACHE).items() if t in wanted}  # 이번 표본·설정 밖 기록은 쓰지 않는다
+        cache = {t: r for t, r in load_cache(paths["cache"]).items() if t in wanted}  # 이번 표본·설정 밖 기록은 쓰지 않는다
         if args.limit:
             print(pilot_summary(cache, tasks))
             return
 
-    results = build_results(preds, cache, rep_ids)
-    tag = "compare" if cache is None else "compare-llm"  # 1단계(전원) 보고서를 덮어쓰지 않는다
+    results = build_results(preds, cache, rep_ids, args.model)
+    tag = "compare" if cache is None else paths["tag"]  # 1단계(전원) 보고서를 덮어쓰지 않는다
     REPORTS.mkdir(parents=True, exist_ok=True)
     (REPORTS / f"{tag}-metrics.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2, default=_json_default), encoding="utf-8")
     if cache is not None:
-        plot_consistency(preds, cache, rep_ids, REPORTS / "figures" / "llm_consistency.png")
+        plot_consistency(preds, cache, rep_ids, REPORTS / "figures" / paths["figure"])
     path = REPORTS / f"{tag}-{results['date']}.md"
     write_report(results, path)
     print(f"보고서: {path}")
