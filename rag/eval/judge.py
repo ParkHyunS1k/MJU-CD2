@@ -99,7 +99,12 @@ def codex_ask(run=subprocess.run) -> Callable[[str], QueryJudgment]:
             schema.write_text(json.dumps(_CODEX_SCHEMA))
             cmd = ["codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral",
                    "-C", tmp, "--output-schema", str(schema), "-o", str(out), "-"]
-            run(cmd, input=prompt, text=True, capture_output=True, timeout=900, check=True)
+            try:
+                run(cmd, input=prompt, text=True, capture_output=True, timeout=900, check=True)
+            except subprocess.CalledProcessError as e:
+                # 사용 한도 등 원인은 Codex의 ERROR 줄에만 있다
+                errors = [line for line in f"{e.stdout or ''}\n{e.stderr or ''}".splitlines() if "ERROR" in line]
+                raise RuntimeError(f"codex exec failed: {' | '.join(errors) or (e.stderr or '')[-500:]}") from e
             return QueryJudgment.model_validate_json(out.read_text())
 
     return ask

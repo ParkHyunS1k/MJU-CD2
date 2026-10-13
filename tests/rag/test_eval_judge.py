@@ -82,3 +82,18 @@ def test_codex_ask_runs_read_only_exec_and_parses_output():
     assert seen["cmd"][-1] == "-"
     assert seen["input"] == "판정 프롬프트"
     assert seen["schema_required"] == ["judgments"]
+
+
+def test_codex_ask_failure_carries_codex_error_message():
+    import subprocess
+
+    import pytest
+
+    from rag.eval.judge import codex_ask
+
+    def failing_run(cmd, input, text, capture_output, timeout, check):
+        raise subprocess.CalledProcessError(1, cmd, output="hook: SessionStart\n",
+                                            stderr="ERROR: You've hit your usage limit. try again at 8:06 AM.\n")
+
+    with pytest.raises(RuntimeError, match="usage limit"):
+        codex_ask(run=failing_run)("판정 프롬프트")
