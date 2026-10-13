@@ -105,3 +105,29 @@ def test_stage4_and_stage5(ctx, monkeypatch):
     assert rows[0]["cfg"] == {"reranker": None} and rows[1]["rerank_ms"] == 1.5
     assert "rerank_ms" in (run.RESULTS / "05_reranker.md").read_text()  # 첫 행에 없는 칸도 표에 나온다
     assert json.loads(run.STATE.read_text())["reranker"] is None
+
+
+def test_choose_k():
+    # 0.9 × Recall@10(0.95) = 0.855 → k=5(0.85) 미달, k=6(0.9)이 처음 넘는다
+    recall = dict(zip(range(1, 11), [0.2, 0.5, 0.7, 0.8, 0.85, 0.9, 0.9, 0.95, 0.95, 0.95]))
+    assert run.choose_k(recall) == 6
+    assert run.choose_k(dict.fromkeys(range(1, 11), 0.0)) == 1
+
+
+def test_choose_threshold_caps_to_keep_answers():
+    hits = [0.70, 0.72, 0.75, 0.80, 0.82, 0.85, 0.88, 0.90, 0.91, 0.95]
+    assert run.choose_threshold([0.50, 0.60], hits) == 0.6
+    assert run.choose_threshold([0.90], hits) == round(float(np.quantile(hits, 0.1)), 4)
+    assert run.choose_threshold([0.55], []) == 0.55  # 조정용에서 정답을 못 찾았으면 상한 없음
+
+
+def test_stage6_writes_operating_values_and_summary(ctx):
+    run.stage6(ctx)
+    state = json.loads(run.STATE.read_text())
+    assert state["query_form"] in ("keyword", "question")
+    assert 1 <= state["final_k"] <= 10
+    assert isinstance(state["threshold"], float)
+    md = (run.RESULTS / "06_operating.md").read_text()
+    assert "쿼리 형태" in md and "최종 k" in md and "임계값" in md and "시험용" in md
+    summary = (run.RESULTS / "summary.md").read_text()
+    assert "selected.json" in summary and "사람 검수" in summary

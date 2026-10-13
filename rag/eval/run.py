@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from rag.eval.embedders import REGISTRY, load
-from rag.eval.evaluate import evaluate, groups, load_eval, pick, preservation, summarize, table
+from rag.eval.evaluate import cell, evaluate, find_evidence, groups, load_eval, pick, preservation, summarize, table
 from rag.eval.search import RERANKERS, BM25Index, dense_rank, reranker, rrf
 from rag.ingest import ingest
 
@@ -161,7 +161,118 @@ def stage5(ctx: Ctx) -> dict:
         note="rerank_ms는 쿼리 하나의 상위 20개 재정렬 시간(모델 로드 제외). 청크는 512토큰에서 잘린다.")
 
 
-STAGES = {1: stage1, 2: stage2, 3: stage3, 4: stage4, 5: stage5}
+def choose_k(recall: dict[int, float], ratio: float = 0.9) -> int:
+    return next(k for k in sorted(recall) if recall[k] >= ratio * recall[10])
+
+
+def choose_threshold(none_top: list[float], hit_scores: list[float], keep: float = 0.9) -> float:
+    """정답 없는 쿼리의 최고 코사인. 단 정답 청크의 keep 비율은 남도록 상한을 둔다."""
+    top = max(none_top)
+    if hit_scores:
+        top = min(top, float(np.quantile(hit_scores, 1 - keep)))
+    return round(top, 4)
+
+
+def _first_hit_scores(chunks, queries, labels, ranked, sims, k) -> list[float]:
+    scores = []
+    for qi, (q, r) in enumerate(zip(queries, ranked)):
+        found = find_evidence(chunks, labels[q["query_id"]])
+        hit = next((i for i in r[:k] if i in found), None)
+        if hit is not None:
+            scores.append(float(sims[qi, hit]))
+    return scores
+
+
+def stage6(ctx: Ctx) -> dict:
+    state = load_state()
+    chunks = chunks_for(state)
+    tune = [q for q in ctx.queries if q["split"] == "tune"]
+    test = [q for q in ctx.queries if q["split"] == "test"]
+    texts = lambda qs: [q["text"] for q in qs]
+    sections = []
+
+    # 1) 쿼리 형태 (조정용). 키워드형이 코드로 만들어져 단순하므로 앞에 둔다.
+    form_rows = []
+    for form in ("keyword", "question", "inbody"):
+        qs = [q for q in tune if q["form"] == form]
+        if qs:
+            ranked, _ = retrieve(state, chunks, texts(qs))
+            per_query = evaluate(chunks, qs, ctx.labels, ranked)
+            form_rows.append(summarize(form, per_query, METRICS, {}, {"queries": len(qs)}))
+    query_form = pick([r for r in form_rows if r["name"] != "inbody"], "ndcg@10")["name"]
+    sections.append(f"## 쿼리 형태 (조정용)\n\n{table(form_rows)}\n\n**선택: {query_form}** (inbody는 참고)")
+
+    # 2) 최종 k (조정용)
+    ranked, sims = retrieve(state, chunks, texts(tune))
+    per_query = evaluate(chunks, tune, ctx.labels, ranked, ks=range(1, 11))
+    recall = {k: float(np.mean([p[f"recall@{k}"] for p in per_query])) for k in range(1, 11)}
+    final_k = choose_k(recall)
+    k_table = "\n".join([
+        "| k | " + " | ".join(str(k) for k in recall) + " |",
+        "|---" * (len(recall) + 1) + "|",
+        "| Recall@k | " + " | ".join(f"{v:.3f}" for v in recall.values()) + " |",
+    ])
+    sections.append(f"## 최종 k (조정용)\n\n{k_table}\n\n**선택: k = {final_k}** (Recall@k ≥ 0.9 × Recall@10 인 최소 k)")
+
+    # 3) 임계값: 정답 없는 쿼리 전부(조정용엔 1개뿐) + 조정용 정답 청크 코사인
+    none = [q for q in ctx.all_queries if q["form"] == "unanswerable" and not q["excluded"]]
+    _, none_sims = retrieve(state, chunks, texts(none))
+    none_top = [float(row.max()) for row in none_sims]
+    hits = _first_hit_scores(chunks, tune, ctx.labels, ranked, sims, final_k)
+    threshold = choose_threshold(none_top, hits)
+    sections.append(
+        f"## 임계값 (임베딩 코사인)\n\n- 정답 없는 쿼리 1위 코사인: {', '.join(f'{s:.4f}' for s in none_top)}\n"
+        f"- 조정용 첫 정답 청크 코사인 {len(hits)}개 중 90%가 남도록 상한을 둠\n\n**선택: {threshold}**")
+
+    # 4) 시험용 보고 (임계값 적용 전/후)
+    ranked_t, sims_t = retrieve(state, chunks, texts(test))
+    filtered = [[i for i in r if sims_t[qi, i] > threshold] for qi, r in enumerate(ranked_t)]
+    ks = (final_k, 10)
+    rows = [summarize("임계값 없음", evaluate(chunks, test, ctx.labels, ranked_t, ks),
+                      [f"recall@{final_k}", "ndcg@10", "mrr", f"ev_recall@{final_k}"], ctx.groups),
+            summarize(f"임계값 {threshold}", evaluate(chunks, test, ctx.labels, filtered, ks),
+                      [f"recall@{final_k}", "ndcg@10", "mrr", f"ev_recall@{final_k}"], ctx.groups)]
+    rejected = sum(float(row.max()) <= threshold for row in none_sims)
+    sections.append(f"## 시험용 결과\n\n{table(rows)}\n\n정답 없는 쿼리 {len(none)}개 중 {rejected}개가 "
+                    f"임계값으로 걸러진다(조정용 1개 포함).")
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    (RESULTS / "06_operating.md").write_text("# 6단계: 운영값\n\n" + "\n\n".join(sections) + "\n", encoding="utf-8")
+    (RESULTS / "06_operating.json").write_text(
+        json.dumps({"primary": "ndcg@10", "rows": form_rows}, ensure_ascii=False), encoding="utf-8")
+    state = {**state, "query_form": query_form, "final_k": final_k, "threshold": threshold}
+    save_state(state)
+    _write_summary(state, rows[1], len(none), rejected)
+    return {"name": f"{query_form}, k={final_k}, threshold={threshold}", "cfg": state}
+
+
+def _write_summary(state: dict, test_row: dict, n_none: int, rejected: int) -> None:
+    k = state["final_k"]
+    lines = [
+        "# 검색 구성 실험 요약",
+        "",
+        "최종 설정은 `rag/eval/selected.json`에 있다(하위 프로젝트 3의 입력).",
+        "",
+        "| 항목 | 선택 |", "|---|---|",
+        *(f"| {key} | {state[key]} |" for key in BASE),
+        "",
+        f"시험용 Recall@{k}: {cell(test_row[f'recall@{k}'])}, nDCG@10: {cell(test_row['ndcg@10'])}, "
+        f"사람 검수 쿼리만: {cell(test_row[f'recall@{k} (사람 검수)'])}. "
+        f"정답 없는 쿼리 {n_none}개 중 {rejected}개를 임계값으로 거른다.",
+        "",
+        "단계별 근거는 `01_parser.md` … `06_operating.md`. 신뢰구간이 겹치면 더 단순·저렴한 구성을 골랐다.",
+        "",
+        "## 한계",
+        "- 라벨은 사람 검수 188건 + LLM(GPT) 판정. 사람 검수 쿼리는 고혈압·당뇨·이상지질혈증뿐이라 "
+        "\"사람 검수\" 열을 함께 본다.",
+        "- 후보 모으기(pooling)로 만든 라벨이라, 어떤 방식도 찾지 못한 정답은 빠져 있다.",
+        "- 근거 문장은 PyMuPDF 텍스트에서 뽑아 1단계 preservation은 PyMuPDF에 유리하다.",
+        "- 쿼리 50개 내외라 차이가 작으면 구간이 겹친다.",
+    ]
+    (RESULTS / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+STAGES = {1: stage1, 2: stage2, 3: stage3, 4: stage4, 5: stage5, 6: stage6}
 
 
 def main(argv: list[str] | None = None) -> int:
