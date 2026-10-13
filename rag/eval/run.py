@@ -77,7 +77,7 @@ class Ctx:
 
 def write_stage(fname: str, title: str, rows: list[dict], chosen_name: str, primary: str, note: str = "") -> None:
     RESULTS.mkdir(parents=True, exist_ok=True)
-    md = f"# {title}\n\n주 지표: `{primary}` (평균 [95% 부트스트랩 구간])\n\n{table(rows)}\n\n**선택: {chosen_name}**\n"
+    md = f"# {title}\n\n주 지표: `{primary}` (평균 [95% 부트스트랩 구간]). 선택: 1등과의 쿼리별 차이 구간이 0을 포함하는 후보 중 표의 가장 위\n\n{table(rows)}\n\n**선택: {chosen_name}**\n"
     if note:
         md += f"\n{note}\n"
     (RESULTS / f"{fname}.md").write_text(md, encoding="utf-8")
@@ -260,7 +260,8 @@ def _write_summary(state: dict, test_row: dict, n_none: int, rejected: int) -> N
         f"사람 검수 쿼리만: {cell(test_row[f'recall@{k} (사람 검수)'])}. "
         f"정답 없는 쿼리 {n_none}개 중 {rejected}개를 임계값으로 거른다.",
         "",
-        "단계별 근거는 `01_parser.md` … `06_operating.md`. 신뢰구간이 겹치면 더 단순·저렴한 구성을 골랐다.",
+        "단계별 근거는 `01_parser.md` … `06_operating.md`. 1등과의 쿼리별 차이(쌍체 부트스트랩 95% 구간)가 0을 포함하면 "
+        "더 단순·저렴한 구성을 골랐다.",
         "",
         "## 한계",
         "- 라벨은 사람 검수 188건 + LLM(GPT) 판정. 사람 검수 쿼리는 고혈압·당뇨·이상지질혈증뿐이라 "

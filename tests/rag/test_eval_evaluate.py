@@ -62,14 +62,31 @@ def test_summarize_empty_group_renders_dash():
     assert "| base | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | – | 3 |" in md
 
 
-def test_pick_prefers_simplest_overlapping():
-    rows = [{"name": "A", "m": (0.70, 0.60, 0.80)}, {"name": "B", "m": (0.75, 0.65, 0.85)},
-            {"name": "C", "m": (0.90, 0.85, 0.95)}]
-    assert pick(rows, "m")["name"] == "B"
-    rows[2]["m"] = (0.90, 0.86, 0.95)
-    assert pick(rows, "m")["name"] == "C"
+def _row(name, values, ids=None):
+    ids = ids or [f"q{i}" for i in range(len(values))]
+    return summarize(name, [{"query_id": q, "m": v} for q, v in zip(ids, values)], ["m"], {})
+
+
+def test_pick_paired_rejects_consistent_loss_despite_overlapping_intervals():
+    best = _row("best", [1.0] * 48 + [0.0] * 3)
+    worse = _row("worse", [1.0] * 44 + [0.0] * 7)  # best가 맞힌 쿼리 4개를 놓친다
+    assert worse["m"][2] >= best["m"][1]  # 따로 본 구간은 겹친다
+    assert pick([worse, best], "m")["name"] == "best"
+
+
+def test_pick_paired_accepts_negligible_loss():
+    best = _row("best", [1.0] * 51)
+    simple = _row("simple", [1.0] * 50 + [0.0])
+    assert pick([simple, best], "m")["name"] == "simple"
 
 
 def test_pick_tie_prefers_first():
-    rows = [{"name": n, "m": [0.5, 0.4, 0.6]} for n in "XYZ"]
+    rows = [_row(n, [0.5, 1.0, 0.0]) for n in "XYZ"]
     assert pick(rows, "m")["name"] == "X"
+
+
+def test_pick_unpaired_when_queries_differ():
+    a = _row("keyword", [1.0] * 10, [f"k{i}" for i in range(10)])
+    b = _row("question", [0.0] * 10, [f"q{i}" for i in range(10)])
+    assert pick([b, a], "m")["name"] == "keyword"
+    assert "per_query" not in table([a])

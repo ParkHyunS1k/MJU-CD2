@@ -5,6 +5,8 @@ import math
 import re
 from pathlib import Path
 
+import numpy as np
+
 from rag.eval.metrics import bootstrap_ci, contains_evidence, query_metrics
 
 _HANGUL = re.compile("[가-힣]")
@@ -75,13 +77,35 @@ def summarize(name: str, per_query: list[dict], metrics: list[str], groups: dict
         row[m] = bootstrap_ci([p[m] for p in per_query])
     for g, ids in groups.items():
         row[f"{metrics[0]} ({g})"] = bootstrap_ci([p[metrics[0]] for p in per_query if p["query_id"] in ids])
+    # pick()이 같은 쿼리끼리 짝지어 비교하도록 주 지표의 쿼리별 값을 남긴다
+    row["per_query"] = {"query_ids": [p["query_id"] for p in per_query], metrics[0]: [p[metrics[0]] for p in per_query]}
     return row | (extra or {})
 
 
+def _diff_upper(a: list[float], b: list[float], paired: bool, n: int = 1000, seed: int = 0) -> float:
+    """mean(a) - mean(b)의 부트스트랩 95% 구간 상한."""
+    rng = np.random.default_rng(seed)
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    if paired:
+        idx = rng.integers(0, len(a), size=(n, len(a)))
+        diffs = (a[idx] - b[idx]).mean(axis=1)
+    else:
+        diffs = (a[rng.integers(0, len(a), size=(n, len(a)))].mean(axis=1)
+                 - b[rng.integers(0, len(b), size=(n, len(b)))].mean(axis=1))
+    return float(np.quantile(diffs, 0.975))
+
+
 def pick(rows: list[dict], metric: str) -> dict:
-    """구간이 1등과 겹치는 후보 중 목록 앞(더 단순·저렴한) 것."""
+    """평균 1등과의 차이 구간이 0을 포함하는(차이가 없는) 후보 중 목록 앞(더 단순·저렴한) 것.
+    같은 쿼리로 잰 행끼리는 쿼리별로 짝지어(쌍체) 부트스트랩한다."""
     best = max(rows, key=lambda r: r[metric][0])
-    return next(r for r in rows if r[metric][2] >= best[metric][1])
+    for row in rows:
+        if row is best:
+            return row
+        paired = row["per_query"]["query_ids"] == best["per_query"]["query_ids"]
+        if _diff_upper(row["per_query"][metric], best["per_query"][metric], paired) >= 0:
+            return row
+    return best
 
 
 def cell(value) -> str:
@@ -94,7 +118,7 @@ def cell(value) -> str:
 
 
 def table(rows: list[dict], columns: list[str] | None = None) -> str:
-    columns = columns or list(dict.fromkeys(k for r in rows for k in r if k not in ("name", "cfg")))
+    columns = columns or list(dict.fromkeys(k for r in rows for k in r if k not in ("name", "cfg", "per_query")))
     head = "| 구성 | " + " | ".join(columns) + " |"
     sep = "|---" * (len(columns) + 1) + "|"
     body = ["| " + " | ".join([r["name"], *(cell(r.get(c, "")) for c in columns)]) + " |" for r in rows]
