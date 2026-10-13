@@ -1,4 +1,6 @@
-from rag.parse import TocEntry, parse_pdf
+import pymupdf
+
+from rag.parse import TocEntry, parse_pdf, parse_pdf_plumber
 
 
 def test_parse_blocks_pages_and_toc(make_pdf):
@@ -44,3 +46,21 @@ def test_two_column_page_keeps_column_order(tmp_path):
 
     texts = [b.text for b in parse_pdf(path).blocks]
     assert texts == ["왼쪽 0", "왼쪽 1", "왼쪽 2", "오른쪽 0", "오른쪽 1", "오른쪽 2"]
+
+
+def test_parse_pdf_plumber_matches_pymupdf_text_and_toc(tmp_path):
+    path = tmp_path / "en.pdf"
+    doc = pymupdf.open()
+    for lines in (["Blood pressure guideline", "Reduce salt intake daily."], ["Exercise five days a week."]):
+        page = doc.new_page(width=595, height=842)
+        for i, text in enumerate(lines):
+            page.insert_text((72, 100 + 100 * i), text, fontname="helv", fontsize=11)
+    doc.set_toc([[1, "Blood pressure guideline", 1]])
+    doc.save(path)
+    doc.close()
+
+    a, b = parse_pdf(path), parse_pdf_plumber(path)
+    assert [x.text for x in b.blocks] == [x.text for x in a.blocks]
+    assert [x.page for x in b.blocks] == [1, 1, 2]
+    assert b.toc == a.toc
+    assert b.page_heights == a.page_heights

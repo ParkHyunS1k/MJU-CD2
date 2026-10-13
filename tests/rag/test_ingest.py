@@ -1,5 +1,8 @@
 import json
 
+import pytest
+
+from rag.eval.metrics import compact
 from rag.ingest import ingest, main
 
 
@@ -121,3 +124,21 @@ def test_ingest_uses_section_spec_and_ignores_other_pages(tmp_path, make_pdf):
     ]
     assert "약물치료" not in records[0]["content"]
     assert stats["no_toc"] == []
+
+
+def test_ingest_spacing_restores_spaces(tmp_path, make_pdf):
+    make_pdf("nospace.pdf", [[(100, "나트륨섭취를줄인다.")]])
+    sources = _sources(tmp_path, [_entry("nospace", "nospace.pdf")])
+    plain, _ = ingest(sources, tmp_path)
+    spaced, _ = ingest(sources, tmp_path, spacing=True)
+    body = lambda records: records[0]["content"].split("\n", 1)[1]
+    assert " " not in body(plain)
+    assert body(spaced) == "나트륨 섭취를 줄인다."
+    assert compact(body(spaced)) == compact(body(plain))
+
+
+def test_ingest_rejects_unknown_parser(tmp_path, make_pdf):
+    make_pdf("a.pdf", [[(100, "본문")]])
+    sources = _sources(tmp_path, [_entry("a", "a.pdf")])
+    with pytest.raises(KeyError):
+        ingest(sources, tmp_path, parser="nope")

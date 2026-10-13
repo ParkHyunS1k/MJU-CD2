@@ -4,16 +4,31 @@ import argparse
 import json
 import logging
 import sys
+from dataclasses import replace
+from functools import cache
 from pathlib import Path
 
 from rag.chunk import chunk_section
 from rag.clean import clean_blocks
-from rag.parse import parse_pdf
+from rag.parse import Block, parse_pdf, parse_pdf_plumber
 from rag.records import build_records, dedupe
 from rag.sections import build_sections, sections_from_spec
 from rag.sources import SourcesError, load_sources
 
 log = logging.getLogger("rag.ingest")
+
+PARSERS = {"pymupdf": parse_pdf, "pdfplumber": parse_pdf_plumber}
+
+
+@cache
+def _kiwi():
+    from kiwipiepy import Kiwi  # 띄어쓰기 실험에서만 필요한 의존성
+
+    return Kiwi()
+
+
+def _space(blocks: list[Block]) -> list[Block]:
+    return [replace(b, text=_kiwi().space(b.text)) for b in blocks]
 
 
 def ingest(
@@ -21,12 +36,15 @@ def ingest(
     raw_dir: Path,
     max_chars: int = 1200,
     overlap: int = 150,
+    parser: str = "pymupdf",
+    spacing: bool = False,
 ) -> tuple[list[dict], dict]:
     stats = {"documents": 0, "chunks": 0, "no_toc": [], "skipped_no_text": [], "failed": []}
     records: list[dict] = []
+    parse = PARSERS[parser]
     for source, path in load_sources(sources_path, raw_dir):
         try:
-            parsed = parse_pdf(path)
+            parsed = parse(path)
         except Exception:
             log.exception("[%s] failed to parse %s", source.id, path)
             stats["failed"].append(source.id)
@@ -36,6 +54,8 @@ def ingest(
             log.warning("[%s] no text layer (scanned PDF?); skipped", source.id)
             stats["skipped_no_text"].append(source.id)
             continue
+        if spacing:
+            blocks = _space(blocks)
         if source.sections:
             sections = sections_from_spec(blocks, source.sections)
             found = {section.heading_path[0] for section in sections}
@@ -63,11 +83,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=Path("rag/data/chunks.jsonl"))
     parser.add_argument("--max-chars", type=int, default=1200)
     parser.add_argument("--overlap", type=int, default=150)
+    parser.add_argument("--parser", choices=sorted(PARSERS), default="pymupdf")
+    parser.add_argument("--spacing", action="store_true", help="kiwi로 띄어쓰기 복원")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     try:
-        records, stats = ingest(args.sources, args.raw_dir, args.max_chars, args.overlap)
+        records, stats = ingest(args.sources, args.raw_dir, args.max_chars, args.overlap, args.parser, args.spacing)
     except SourcesError as e:
         log.error("%s", e)
         return 1
