@@ -1,6 +1,6 @@
 import numpy as np
 
-from rag.eval.search import BM25Index, dense_rank, kiwi_tokens
+from rag.eval.search import Reranker, rrf, BM25Index, dense_rank, kiwi_tokens
 
 
 def test_dense_rank_orders_by_dot_product_with_stable_ties():
@@ -26,3 +26,19 @@ def test_kiwi_tokens_keeps_content_morphemes():
     assert "소금" in tokens
     assert "제한" in tokens
     assert "을" not in tokens
+
+
+def test_rrf_combines_and_breaks_ties_by_index():
+    assert rrf([[2, 0, 1], [0, 2]]) == [0, 2, 1]
+    assert rrf([[1], [0]]) == [0, 1]
+
+
+class _FakeCross:
+    def predict(self, pairs):
+        return [len(text) for _, text in pairs]
+
+
+def test_reranker_orders_by_score_and_times_calls():
+    r = Reranker("bge-reranker-v2-m3", model=_FakeCross())
+    assert r.rerank("q", ["a", "ccc", "bb", "dddd"], [0, 1, 2]) == [1, 2, 0]
+    assert r.ms_per_call() >= 0.0
