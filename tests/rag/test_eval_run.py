@@ -75,3 +75,33 @@ def test_stage2_varies_chunking(ctx):
     assert [r["cfg"] for r in saved["rows"]][:2] == [{"max_chars": 2000, "overlap": 0},
                                                      {"max_chars": 2000, "overlap": 150}]
     assert json.loads(run.STATE.read_text())["max_chars"] == 2000
+
+
+def test_stage3_records_dims_and_storage(ctx, monkeypatch):
+    monkeypatch.setattr(run, "REGISTRY", {n: FakeEmbedder for n in run.EMBEDDINGS})
+    run.stage3(ctx)
+    state = json.loads(run.STATE.read_text())
+    assert state["embedding_model"] == "gemini-768"  # 모두 같으면 맨 앞
+    assert state["dimensions"] == 64
+    row = json.loads((run.RESULTS / "03_embedding.json").read_text())["rows"][0]
+    assert row["dims"] == 64 and row["storage_mb"] == round(64 * 2 * 4 / 1e6, 3)
+
+
+class FakeReranker:
+    def rerank(self, query, texts, candidates):
+        return list(reversed(candidates))
+
+    def ms_per_call(self):
+        return 1.5
+
+
+def test_stage4_and_stage5(ctx, monkeypatch):
+    monkeypatch.setattr(run, "reranker", lambda name: FakeReranker())
+    run.stage4(ctx)
+    assert [r["cfg"] for r in json.loads((run.RESULTS / "04_hybrid.json").read_text())["rows"]] == [
+        {"hybrid": False}, {"hybrid": True}]
+    run.stage5(ctx)
+    rows = json.loads((run.RESULTS / "05_reranker.json").read_text())["rows"]
+    assert rows[0]["cfg"] == {"reranker": None} and rows[1]["rerank_ms"] == 1.5
+    assert "rerank_ms" in (run.RESULTS / "05_reranker.md").read_text()  # 첫 행에 없는 칸도 표에 나온다
+    assert json.loads(run.STATE.read_text())["reranker"] is None

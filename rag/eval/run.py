@@ -5,13 +5,14 @@ import argparse
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
 
-from rag.eval.embedders import load
+from rag.eval.embedders import REGISTRY, load
 from rag.eval.evaluate import evaluate, groups, load_eval, pick, preservation, summarize, table
-from rag.eval.search import BM25Index, dense_rank, reranker, rrf
+from rag.eval.search import RERANKERS, BM25Index, dense_rank, reranker, rrf
 from rag.ingest import ingest
 
 log = logging.getLogger("rag.eval.run")
@@ -121,7 +122,46 @@ def stage2(ctx: Ctx) -> dict:
                      "recall@budget", note="앞쪽일수록 청크 수가 적다(저장·검색 비용이 작다).")
 
 
-STAGES = {1: stage1, 2: stage2}
+RERANKER_NAMES = list(RERANKERS)
+EMBEDDINGS = ["gemini-768", "bge-m3", "kure-v1", "qwen3-0.6b", "e5-large-instruct", "gemini-1536", "gemini-3072"]
+
+
+def embedding_info(name: str, n_chunks: int, sample: list[str]) -> dict:
+    """캐시를 거치지 않고 쿼리 임베딩 지연을 잰다(로컬 모델은 로드·워밍업 뒤)."""
+    inner = REGISTRY[name]()
+    inner.encode(sample[:1], "query")
+    start = time.perf_counter()
+    vectors = inner.encode(sample, "query")
+    dims = int(vectors.shape[1])
+    return {"dims": dims, "storage_mb": round(dims * 2 * n_chunks / 1e6, 3),
+            "query_ms": round((time.perf_counter() - start) * 1000 / len(sample), 1)}
+
+
+def stage3(ctx: Ctx) -> dict:
+    sample = [q["text"] for q in ctx.queries[:10]]
+    chosen = run_stage(
+        ctx, "03_embedding", "3단계: 임베딩 모델", [(n, {"embedding_model": n}) for n in EMBEDDINGS], "ndcg@10",
+        extra=lambda cfg, chunks: embedding_info(cfg["embedding_model"], len(chunks), sample),
+        note="앞쪽일수록 저장 용량(차원)이 작다. storage_mb는 halfvec(2바이트) 기준. "
+             "gemini의 query_ms는 네트워크 왕복을 포함한다.")
+    save_state({**load_state(), "dimensions": chosen["dims"]})
+    return chosen
+
+
+def stage4(ctx: Ctx) -> dict:
+    return run_stage(ctx, "04_hybrid", "4단계: 하이브리드 (벡터 + kiwi BM25, RRF k=60)",
+                     [("벡터만", {"hybrid": False}), ("벡터 + BM25", {"hybrid": True})], "ndcg@10")
+
+
+def stage5(ctx: Ctx) -> dict:
+    variants = [("없음", {"reranker": None})] + [(n, {"reranker": n}) for n in RERANKER_NAMES]
+    return run_stage(
+        ctx, "05_reranker", "5단계: 리랭커 (상위 20개 재정렬)", variants, "ndcg@10",
+        extra=lambda cfg, chunks: {"rerank_ms": reranker(cfg["reranker"]).ms_per_call()} if cfg["reranker"] else {},
+        note="rerank_ms는 쿼리 하나의 상위 20개 재정렬 시간(모델 로드 제외). 청크는 512토큰에서 잘린다.")
+
+
+STAGES = {1: stage1, 2: stage2, 3: stage3, 4: stage4, 5: stage5}
 
 
 def main(argv: list[str] | None = None) -> int:
