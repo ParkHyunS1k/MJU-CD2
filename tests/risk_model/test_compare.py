@@ -270,3 +270,20 @@ def test_report_links_model_figure(knhanes_like, tmp_path):
     write_report(res, tmp_path / "c.md")
     assert res["llm"]["model"] == "m-x"
     assert "figures/llm_consistency_m-x.png" in (tmp_path / "c.md").read_text(encoding="utf-8")
+
+
+def test_grade_change_rate():
+    probs = np.array([[0.01] * 5,                       # 항상 낮음
+                      [0.04, 0.06, 0.04, 0.04, 0.04],   # 낮음↔보통
+                      [0.30] * 5])                      # 항상 높음
+    assert cmp.grade_change_rate(probs, 0.05, 0.2) == pytest.approx(1 / 3)
+    assert np.isnan(cmp.grade_change_rate(np.empty((0, 5)), 0.05, 0.2))
+
+
+def test_repeat_report_compares_models(tmp_path):
+    rows = [{"model": "m-a", "disease": "hypertension", "n": 40, "sd_median": 1.6, "sd_p90": 2.9,
+             "range_median": 3.0, "range_max": 8.0, "grade_change": 0.2, "mean_pred": 0.12}]
+    out = tmp_path / "r.md"
+    cmp.write_repeat_report(rows, {"hypertension": (0.05, 0.2)}, "2026-10-13", out)
+    text = out.read_text(encoding="utf-8")
+    assert "m-a" in text and "고혈압" in text and "20.0%" in text and "프롬프트 원문" in text

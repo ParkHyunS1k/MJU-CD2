@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
@@ -22,7 +23,7 @@ from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_s
 from training.analysis.common import load_knhanes
 from training.evaluate import COMPARE_MODELS, _ci, _json_default, _pct, nested_predictions, outer_predictions
 from training.features import DISEASES, THRESHOLD_AGE, build_features, training_rows
-from training.metrics import bootstrap_ci, paired_diff_ci, sens_spec, wilson_ci
+from training.metrics import bootstrap_ci, paired_diff_ci, risk_levels, sens_spec, wilson_ci
 from training.model import SEED, build_pipeline
 
 ROOT = Path(__file__).resolve().parent
@@ -324,6 +325,56 @@ def pilot_summary(cache: dict, tasks) -> str:
     return "\n".join(L)
 
 
+def grade_change_rate(probs: np.ndarray, medium: float, high: float) -> float:
+    """반복 응답을 앱 등급(낮음·보통·높음) 기준값으로 나눴을 때 등급이 한 번이라도 바뀐 사람의 비율."""
+    if len(probs) == 0:
+        return float("nan")
+    lv = risk_levels(probs, medium, high)
+    return float((lv != lv[:, :1]).any(axis=1).mean())
+
+
+def _app_thresholds() -> dict[str, tuple[float, float]]:
+    """배포 모델(models/*.pkl)의 등급 기준값. 모델이 달라도 같은 규칙으로 판정 변경을 비교하려고 쓴다."""
+    out = {}
+    for key in KEYS:
+        b = joblib.load(ROOT.parent / "models" / f"{key}.pkl")
+        out[key] = (float(b["thresh_medium"]), float(b["thresh_high"]))
+    return out
+
+
+def repeat_rows(cache: dict, rep_ids: list[int], model: str, thresholds: dict) -> list[dict]:
+    rows = []
+    for key in KEYS:
+        m = repeat_matrix(cache, rep_ids, key).to_numpy()
+        if len(m) == 0:
+            continue
+        c = consistency_stats(m, np.inf)
+        rows.append({"model": model, "disease": key, "n": c["n"], "sd_median": c["sd_median"], "sd_p90": c["sd_p90"],
+                     "range_median": c["range_median"], "range_max": c["range_max"],
+                     "grade_change": grade_change_rate(m, *thresholds[key]), "mean_pred": float(m.mean())})
+    return rows
+
+
+def write_repeat_report(rows: list[dict], thresholds: dict, day: str, path: Path) -> None:
+    L = [f"# GPT 모델별 반복 응답 편차 ({day})", "",
+         "설계: `docs/superpowers/specs/2026-10-13-model-comparison-design.md`. 모든 모델이 같은 40명(25–44세)에게 "
+         "같은 입력을 5회 받았다. 등급 변경은 5회 응답을 앱의 등급 기준값(배포 모델의 보통·높음)으로 나눴을 때 "
+         "등급이 한 번이라도 바뀐 사람의 비율이다. ML(②)은 결정적이라 0이다.", "",
+         "기준값(보통 / 높음): " + ", ".join(f"{DISEASES[k]} {_pct(m)} / {_pct(h)}" for k, (m, h) in thresholds.items()), "",
+         "| 모델 | 질환 | 인원 | 평균 예측 | 표준편차 중앙값 / 90% (%p) | 범위 중앙값 / 최대 (%p) | 앱 등급 변경 |",
+         "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        L.append(f"| `{r['model']}` | {DISEASES[r['disease']]} | {r['n']} | {_pct(r['mean_pred'])} | "
+                 f"{r['sd_median']:.1f} / {r['sd_p90']:.1f} | {r['range_median']:.1f} / {r['range_max']:.1f} | "
+                 f"{_pct(r['grade_change'])} |")
+    L += ["", "## 한계", "",
+          "- 40명이라 AUROC는 계산하지 않는다. 판별력 비교는 500명 보고서(`compare-llm-gpt-5.6-luna-*`)를 본다.",
+          "- 큰 모델(terra)은 5시간 한도 소모가 커서(20회에 7%) 반복 측정만 했다.",
+          "", "## 프롬프트 원문 (예시 입력)", "", "```", build_prompt(EXAMPLE), "```"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+
+
 def build_results(preds: dict[str, pd.DataFrame], cache: dict | None, rep_ids: list[int], model: str = MODEL) -> dict:
     res = {"date": date.today().isoformat(), "llm": None, "diseases": {}}
     if cache is not None:
@@ -419,6 +470,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--limit", type=int, help="앞의 N회만 호출하고 시범 요약만 출력한다(2단계)")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--model", default=MODEL, help="Codex 모델(예: gpt-5.6-terra)")
+    ap.add_argument("--repeat-only", action="store_true", help="반복 측정 40명×5회만 호출하고 모델별 편차 보고서를 쓴다")
     args = ap.parse_args(argv)
     paths = llm_paths(args.model)
 
@@ -436,6 +488,8 @@ def main(argv: list[str] | None = None) -> None:
         ids = sorted(int(i) for i in rng.choice(ids, min(AUROC_N, len(ids)), replace=False))
         rep_ids = sorted(int(i) for i in rng.choice(ids, min(REPEAT_N, len(ids)), replace=False))
         tasks = [(i, 0) for i in ids] + [(i, r) for i in rep_ids for r in range(1, REPEATS)]
+        if args.repeat_only:
+            tasks = [(i, r) for i in rep_ids for r in range(REPEATS)]
         X = build_features(df.loc[ids])
         if args.limit:
             tasks = tasks[:args.limit]
@@ -444,6 +498,17 @@ def main(argv: list[str] | None = None) -> None:
         cache = {t: r for t, r in load_cache(paths["cache"]).items() if t in wanted}  # 이번 표본·설정 밖 기록은 쓰지 않는다
         if args.limit:
             print(pilot_summary(cache, tasks))
+            return
+        if args.repeat_only:
+            th = _app_thresholds()
+            rows = []
+            for model in dict.fromkeys([MODEL, args.model]):
+                rows += repeat_rows(load_cache(llm_paths(model)["cache"]), rep_ids, model, th)
+            day = date.today().isoformat()
+            plot_consistency(preds, cache, rep_ids, REPORTS / "figures" / paths["figure"])
+            path = REPORTS / f"compare-repeat-{day}.md"
+            write_repeat_report(rows, th, day, path)
+            print(f"보고서: {path}")
             return
 
     results = build_results(preds, cache, rep_ids, args.model)
