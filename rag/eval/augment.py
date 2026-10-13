@@ -84,6 +84,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="라벨 보강: 새 청킹의 상위 결과 중 라벨 없는 청크 판정")
     parser.add_argument("action", choices=["collect", "judge", "apply"])
     parser.add_argument("--chunker", required=True)
+    parser.add_argument("--max-chars", type=int, default=1200)
+    parser.add_argument("--overlap", type=int, default=0)
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--items", type=Path)
@@ -91,7 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     ctx = run.Ctx()
-    state = {**run.BASE, "chunker": args.chunker, "max_chars": 1200, "overlap": 0, "embedding_model": "bge-m3"}
+    state = {**run.BASE, "chunker": args.chunker, "max_chars": args.max_chars, "overlap": args.overlap,
+             "embedding_model": "bge-m3"}  # 2단계 비교와 같은 임베딩
     chunks = run.chunks_for(state)
     if args.action == "collect":
         ranked, _ = run.retrieve(state, chunks, [q["text"] for q in ctx.queries])

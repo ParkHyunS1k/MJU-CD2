@@ -66,3 +66,20 @@ def test_judge_items_maps_judge_results_and_resumes(tmp_path):
         {"candidate_id": "c1", "relevant": True, "evidence": ["나트륨이 많은 가공식품과 국물 섭취를 줄이도록 권고한다."]},
         {"candidate_id": "c2", "relevant": False, "evidence": []}]}
     assert judge_items(items, ask, cache) == judgments and len(calls) == 1  # 이미 판정한 쿼리는 다시 묻지 않는다
+
+
+def test_cli_collect_uses_given_chunk_size(tmp_path, monkeypatch):
+    from rag.eval import augment, run
+
+    seen = {}
+
+    class FakeCtx:
+        queries, labels = QUERIES, LABELS
+
+    monkeypatch.setattr(run, "Ctx", FakeCtx)
+    monkeypatch.setattr(run, "chunks_for", lambda state: seen.setdefault("state", state) and CHUNKS)
+    monkeypatch.setattr(run, "retrieve", lambda state, chunks, texts: ([[0, 1, 2]], None))
+    out = tmp_path / "items.json"
+    augment.main(["collect", "--chunker", "chars", "--max-chars", "2000", "--overlap", "150", "--out", str(out)])
+    assert (seen["state"]["chunker"], seen["state"]["max_chars"], seen["state"]["overlap"]) == ("chars", 2000, 150)
+    assert seen["state"]["embedding_model"] == "bge-m3"
