@@ -137,3 +137,67 @@ def test_report_and_plot_with_llm(knhanes_like, tmp_path):
     assert "④ GPT" in text and "반복 응답 편차" in text and "프롬프트 원문" in text
     plot_consistency(preds, cache, rep_ids, tmp_path / "fig.png")
     assert (tmp_path / "fig.png").exists()
+
+
+import json as _json
+
+import training.compare as cmp
+from training.compare import load_cache, pilot_summary, run_llm
+
+
+def _people():
+    return pd.DataFrame([[34, 0, 26.1, 27.4, 1, 0, 0], [41, 1, 22.0, 31.0, 0, 1, 0]],
+                        columns=["age", "female", "bmi", "body_fat_percentage",
+                                 "fh_hypertension", "fh_diabetes", "fh_dyslipidemia"], index=[10, 11])
+
+
+def test_build_prompt_has_inputs_and_definitions():
+    p = cmp.build_prompt(_people().loc[10])
+    assert "34세" in p and "남성" in p and "BMI 26.1" in p and "체지방률 27.4%" in p
+    assert "고혈압 가족력 있음" in p and "당뇨 가족력 없음" in p and "140/90" in p
+
+
+def test_run_llm_resumes_and_retries_failures(tmp_path, monkeypatch):
+    monkeypatch.setattr(cmp.time, "sleep", lambda s: None)
+    good = '{"hypertension": 20, "diabetes": 5, "cholesterol": 10, "triglyceride": 12}'
+    calls = []
+
+    def flaky(prompt):
+        calls.append(prompt)
+        if "41세" in prompt and len(calls) <= 4:
+            return '{"hypertension": -1, "diabetes": -1, "cholesterol": -1, "triglyceride": -1}', 100
+        return good, 100
+
+    cache = tmp_path / "c.jsonl"
+    tasks = [(10, 0), (11, 0), (10, 1)]
+    run_llm(tasks, _people(), cache, caller=flaky, workers=1)
+    c = load_cache(cache)
+    assert c[(10, 0)]["probs"]["hypertension"] == 0.2 and c[(11, 0)]["probs"] is None
+    n_first = len(calls)
+    run_llm(tasks, _people(), cache, caller=flaky, workers=1)   # 성공분은 건너뛰고 실패분만 다시 한다
+    assert len(calls) == n_first + 1 and load_cache(cache)[(11, 0)]["probs"] is not None
+
+
+def test_ask_retries_codex_errors(monkeypatch):
+    monkeypatch.setattr(cmp.time, "sleep", lambda s: None)
+
+    def broken(prompt):
+        raise cmp.CodexError("Selected model is at capacity")
+
+    r = cmp.ask("p", broken)
+    assert r["probs"] is None and "capacity" in r["error"]
+
+
+def test_load_cache_skips_truncated_line(tmp_path):
+    path = tmp_path / "c.jsonl"
+    ok = {"idx": 1, "rep": 0, "probs": {k: 0.1 for k in KEYS}, "error": None, "tokens": 5, "seconds": 1.0}
+    path.write_text(_json.dumps(ok) + "\n" + '{"idx": 2, "rep": 0, "pro', encoding="utf-8")
+    assert list(load_cache(path)) == [(1, 0)]
+    assert load_cache(tmp_path / "none.jsonl") == {}
+
+
+def test_pilot_summary_counts():
+    cache = {(1, 0): {"idx": 1, "rep": 0, "probs": {k: 0.1 for k in KEYS}, "error": None, "tokens": 20000, "seconds": 8.0},
+             (2, 0): {"idx": 2, "rep": 0, "probs": None, "error": "parse", "tokens": None, "seconds": 9.0}}
+    s = pilot_summary(cache, [(1, 0), (2, 0)])
+    assert "성공 1/2" in s and "20,000" in s

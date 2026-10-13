@@ -5,6 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import subprocess
+import tempfile
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -14,7 +21,7 @@ from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_s
 
 from training.analysis.common import load_knhanes
 from training.evaluate import COMPARE_MODELS, _ci, _json_default, _pct, nested_predictions, outer_predictions
-from training.features import DISEASES, THRESHOLD_AGE, training_rows
+from training.features import DISEASES, THRESHOLD_AGE, build_features, training_rows
 from training.metrics import bootstrap_ci, paired_diff_ci, sens_spec, wilson_ci
 from training.model import SEED, build_pipeline
 
@@ -28,6 +35,14 @@ KEYS = ("hypertension", "diabetes", "cholesterol", "triglyceride")
 MODEL = "gpt-5.6-luna"
 REPEATS = 5
 REPEAT_N = 300
+CACHE = ROOT / "output" / "llm" / f"{MODEL}.jsonl"
+SCHEMA = {"type": "object", "additionalProperties": False, "required": list(KEYS),
+          "properties": {k: {"type": "integer", "minimum": 0, "maximum": 100} for k in KEYS}}
+_TMP = Path(tempfile.gettempdir()) / "compare-codex"
+_WORKDIR = _TMP / "empty"     # Codex 작업 폴더: 비워 둔다
+_IO = _TMP / "io"             # 스키마와 응답 파일
+_SCHEMA_PATH = _IO / "schema.json"
+_setup_lock = threading.Lock()
 PROMPT = """당신은 의료 위험도를 추정하는 도우미입니다.
 아래 사람의 정보만으로, 이 사람이 현재 각 질환에 해당할 확률을 0-100 정수로 답하세요.
 정보가 제한적이어도 반드시 최선의 추정치를 숫자로 답하세요.
@@ -183,6 +198,98 @@ def plot_consistency(preds: dict, cache: dict, rep_ids: list[int], path: Path, n
     plt.close(fig)
 
 
+class CodexError(RuntimeError):
+    pass
+
+
+def call_codex(prompt: str) -> tuple[str, int | None]:
+    """codex exec 1회. 사용자 설정을 끄고 빈 폴더에서 stdin을 닫고 실행한다(닫지 않으면 멈춘다)."""
+    with _setup_lock:  # 여러 스레드가 동시에 스키마를 쓰지 않게 한다
+        if not _SCHEMA_PATH.exists():
+            _WORKDIR.mkdir(parents=True, exist_ok=True)
+            _IO.mkdir(parents=True, exist_ok=True)
+            _SCHEMA_PATH.write_text(json.dumps(SCHEMA), encoding="utf-8")
+    schema = _SCHEMA_PATH
+    out = _IO / f"{uuid.uuid4().hex}.txt"
+    r = subprocess.run(
+        ["codex", "exec", "--ignore-user-config", "-m", MODEL, "-c", "model_reasoning_effort=low",
+         "-s", "read-only", "--skip-git-repo-check", "--ephemeral",
+         "--output-schema", str(schema), "-o", str(out), prompt],
+        cwd=_WORKDIR, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
+    log = r.stdout + r.stderr
+    if r.returncode != 0 or not out.exists():
+        raise CodexError(log[-500:])
+    text = out.read_text(encoding="utf-8").strip()
+    out.unlink()
+    m = re.search(r"tokens used\s*\n\s*([\d,]+)", log)
+    return text, int(m.group(1).replace(",", "")) if m else None
+
+
+def ask(prompt: str, caller, attempts: int = 3) -> dict:
+    t0, err = time.monotonic(), None
+    for _ in range(attempts):
+        try:
+            text, tokens = caller(prompt)
+        except (CodexError, subprocess.TimeoutExpired) as e:
+            err = str(e)
+            time.sleep(30 if "capacity" in err else 5)
+            continue
+        probs = parse_response(text)
+        if probs is not None:
+            return {"probs": probs, "error": None, "tokens": tokens, "seconds": round(time.monotonic() - t0, 1)}
+        err = f"parse: {text[:200]}"
+    return {"probs": None, "error": err, "tokens": None, "seconds": round(time.monotonic() - t0, 1)}
+
+
+def load_cache(path: Path) -> dict[tuple[int, int], dict]:
+    """같은 키가 여러 번 있으면 마지막 기록을 쓴다. 끊겨서 잘린 줄은 건너뛴다."""
+    if not path.exists():
+        return {}
+    out = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        out[(r["idx"], r["rep"])] = r
+    return out
+
+
+def run_llm(tasks: list[tuple[int, int]], X: pd.DataFrame, cache_path: Path, caller=call_codex, workers: int = 4) -> None:
+    """캐시에 성공 기록이 없는 (사람, 반복)만 호출해 JSONL에 덧붙인다."""
+    done = {k for k, r in load_cache(cache_path).items() if r["probs"] is not None}
+    todo = [t for t in tasks if t not in done]
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = threading.Lock()
+
+    def work(task):
+        idx, rep = task
+        rec = {"idx": int(idx), "rep": int(rep), **ask(build_prompt(X.loc[idx]), caller)}
+        with lock, cache_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    print(f"LLM 호출 {len(todo)}건 (캐시 {len(tasks) - len(todo)}건 건너뜀)", flush=True)
+    with ThreadPoolExecutor(workers) as ex:
+        for n, _ in enumerate(ex.map(work, todo), 1):
+            if n % 50 == 0:
+                print(f"  {n}/{len(todo)}", flush=True)
+
+
+def pilot_summary(cache: dict, tasks) -> str:
+    recs = [cache[t] for t in tasks if t in cache]
+    ok = [r for r in recs if r["probs"]]
+    toks = [r["tokens"] for r in ok if r["tokens"]]
+    L = [f"성공 {len(ok)}/{len(tasks)}",
+         f"호출당 시간 중앙값 {np.median([r['seconds'] for r in recs]):.1f}초" if recs else "기록 없음",
+         f"호출당 토큰 중앙값 {int(np.median(toks)):,}" if toks else "토큰 기록 없음"]
+    for k in KEYS:
+        v = [r["probs"][k] * 100 for r in ok]
+        if v:
+            L.append(f"{k}: 최소 {min(v):.0f} / 중앙 {np.median(v):.0f} / 최대 {max(v):.0f}")
+    L += [f"실패 예: {r['error'][:120]}" for r in recs if not r["probs"]][:3]
+    return "\n".join(L)
+
+
 def build_results(preds: dict[str, pd.DataFrame], cache: dict | None, rep_ids: list[int]) -> dict:
     res = {"date": date.today().isoformat(), "llm": None, "diseases": {}}
     if cache is not None:
@@ -270,19 +377,38 @@ def _spline_flags() -> dict[str, bool]:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--skip-llm", action="store_true", help="⓪①②③만 계산한다(1단계)")
+    ap.add_argument("--limit", type=int, help="앞의 N회만 호출하고 시범 요약만 출력한다(2단계)")
+    ap.add_argument("--workers", type=int, default=4)
     args = ap.parse_args(argv)
-    if not args.skip_llm:
-        raise SystemExit("LLM 단계는 Task 4에서 추가한다. --skip-llm으로 실행하라.")
+
     df = load_knhanes()
     spline = _spline_flags()
     preds = {}
     for key in DISEASES:
         print(f"[{key}] 예측 중…", flush=True)
         preds[key] = disease_predictions(df, key, spline[key])
-    results = build_results(preds, None, [])
+
+    cache, rep_ids = None, []
+    if not args.skip_llm:
+        ids = sorted(int(i) for i in set().union(*(p.index for p in preds.values())))
+        rng = np.random.default_rng(SEED)
+        rep_ids = sorted(int(i) for i in rng.choice(ids, min(REPEAT_N, len(ids)), replace=False))
+        tasks = [(i, 0) for i in ids] + [(i, r) for i in rep_ids for r in range(1, REPEATS)]
+        X = build_features(df.loc[ids])
+        if args.limit:
+            tasks = tasks[:args.limit]
+        run_llm(tasks, X, CACHE, workers=args.workers)
+        cache = load_cache(CACHE)
+        if args.limit:
+            print(pilot_summary(cache, tasks))
+            return
+
+    results = build_results(preds, cache, rep_ids)
     REPORTS.mkdir(parents=True, exist_ok=True)
     (REPORTS / "compare-metrics.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2, default=_json_default), encoding="utf-8")
+    if cache is not None:
+        plot_consistency(preds, cache, rep_ids, REPORTS / "figures" / "llm_consistency.png")
     path = REPORTS / f"compare-{results['date']}.md"
     write_report(results, path)
     print(f"보고서: {path}")
