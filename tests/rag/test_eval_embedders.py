@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 
 from rag.eval.embedders import REGISTRY, CachedEmbedder, l2_normalize
@@ -75,3 +76,35 @@ def test_gemini_embedder_small_batches_and_retries_on_quota(monkeypatch):
     assert vectors.shape == (45, 2)
     assert client.batch_sizes == [20, 20, 5]
     assert len(sleeps) == 1 and sleeps[0] >= 15
+
+
+class RecordingEmbedder:
+    name = "rec"
+
+    def __init__(self, fail_after: int | None = None):
+        self.seen: list[list[str]] = []
+        self.fail_after = fail_after
+
+    def encode(self, texts, kind):
+        if self.fail_after is not None and len(self.seen) >= self.fail_after:
+            raise RuntimeError("quota")
+        self.seen.append(list(texts))
+        return np.array([[float(len(t)), 1.0] for t in texts], dtype=np.float32)
+
+
+def test_cache_is_per_text_so_subsets_hit(tmp_path):
+    inner = RecordingEmbedder()
+    cached = CachedEmbedder(inner, tmp_path)
+    full = cached.encode(["가", "나다", "라마바"], "query")
+    sub = cached.encode(["라마바", "가", "사"], "query")
+    assert inner.seen == [["가", "나다", "라마바"], ["사"]]
+    assert np.array_equal(sub[:2], full[[2, 0]])
+
+
+def test_cache_keeps_finished_batches_when_inner_fails(tmp_path):
+    texts = [f"문장{i}" for i in range(5)]
+    with pytest.raises(RuntimeError):
+        CachedEmbedder(RecordingEmbedder(fail_after=1), tmp_path, batch=2).encode(texts, "doc")
+    inner = RecordingEmbedder()
+    CachedEmbedder(inner, tmp_path, batch=2).encode(texts, "doc")
+    assert inner.seen == [["문장2", "문장3"], ["문장4"]]

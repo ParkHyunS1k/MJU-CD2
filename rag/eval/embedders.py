@@ -21,20 +21,32 @@ def l2_normalize(m: np.ndarray) -> np.ndarray:
 
 
 class CachedEmbedder:
-    def __init__(self, inner: Embedder, cache_dir: Path):
+    """텍스트마다 벡터를 캐시한다. 부분 집합 요청도 캐시를 쓰고, batch마다 저장해 중간에 끊겨도 이어서 한다."""
+
+    def __init__(self, inner: Embedder, cache_dir: Path, batch: int = 100):
         self.inner = inner
         self.name = inner.name
         self.cache_dir = cache_dir
+        self.batch = batch
 
     def encode(self, texts: list[str], kind: str) -> np.ndarray:
-        key = hashlib.sha256("\x1f".join([self.name, kind, *texts]).encode()).hexdigest()
-        path = self.cache_dir / f"{self.name}-{kind}-{key[:24]}.npy"
+        path = self.cache_dir / f"{self.name}-{kind}.npz"
+        store: dict[str, np.ndarray] = {}
         if path.exists():
-            return np.load(path)
-        vectors = self.inner.encode(texts, kind)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        np.save(path, vectors)
-        return vectors
+            with np.load(path) as f:
+                store = dict(zip(f["keys"].tolist(), f["vectors"]))
+        keys = [_text_key(t) for t in texts]
+        todo = list(dict.fromkeys(t for k, t in zip(keys, texts) if k not in store))
+        for i in range(0, len(todo), self.batch):
+            part = todo[i : i + self.batch]
+            store.update(zip(map(_text_key, part), self.inner.encode(part, kind)))
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            np.savez(path, keys=np.array(list(store)), vectors=np.stack(list(store.values())))
+        return np.stack([store[k] for k in keys])
+
+
+def _text_key(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 class GeminiEmbedder:

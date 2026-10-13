@@ -127,20 +127,24 @@ EMBEDDINGS = ["gemini-768", "bge-m3", "kure-v1", "qwen3-0.6b", "e5-large-instruc
 
 
 def embedding_info(name: str, n_chunks: int, sample: list[str]) -> dict:
-    """캐시를 거치지 않고 쿼리 임베딩 지연을 잰다(로컬 모델은 로드·워밍업 뒤)."""
-    inner = REGISTRY[name]()
-    inner.encode(sample[:1], "query")
-    start = time.perf_counter()
-    vectors = inner.encode(sample, "query")
-    dims = int(vectors.shape[1])
-    return {"dims": dims, "storage_mb": round(dims * 2 * n_chunks / 1e6, 3),
-            "query_ms": round((time.perf_counter() - start) * 1000 / len(sample), 1)}
+    """차원은 캐시된 벡터로, 쿼리 임베딩 지연은 캐시 없이 잰다(로컬 모델은 로드·워밍업 뒤)."""
+    dims = int(load(name).encode(sample, "query").shape[1])
+    try:
+        inner = REGISTRY[name]()
+        inner.encode(sample[:1], "query")
+        start = time.perf_counter()
+        inner.encode(sample, "query")
+        query_ms = round((time.perf_counter() - start) * 1000 / len(sample), 1)
+    except Exception as e:  # API 한도 등으로 못 재면 결과표에 표시만 한다
+        log.warning("%s query latency not measured: %s", name, e)
+        query_ms = "n/a"
+    return {"dims": dims, "storage_mb": round(dims * 2 * n_chunks / 1e6, 3), "query_ms": query_ms}
 
 
-def stage3(ctx: Ctx) -> dict:
+def stage3(ctx: Ctx, names: list[str] = EMBEDDINGS) -> dict:
     sample = [q["text"] for q in ctx.queries[:10]]
     chosen = run_stage(
-        ctx, "03_embedding", "3단계: 임베딩 모델", [(n, {"embedding_model": n}) for n in EMBEDDINGS], "ndcg@10",
+        ctx, "03_embedding", "3단계: 임베딩 모델", [(n, {"embedding_model": n}) for n in names], "ndcg@10",
         extra=lambda cfg, chunks: embedding_info(cfg["embedding_model"], len(chunks), sample),
         note="앞쪽일수록 저장 용량(차원)이 작다. storage_mb는 halfvec(2바이트) 기준. "
              "gemini의 query_ms는 네트워크 왕복을 포함한다.")
@@ -279,11 +283,15 @@ STAGES = {1: stage1, 2: stage2, 3: stage3, 4: stage4, 5: stage5, 6: stage6}
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="RAG 검색 구성 실험 (계획 B)")
     parser.add_argument("stages", nargs="+", type=int, choices=sorted(STAGES))
+    parser.add_argument("--embeddings", help="3단계에서 비교할 모델(쉼표 구분). 기본은 EMBEDDINGS 전부")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ctx = Ctx()
     for n in args.stages:
-        chosen = STAGES[n](ctx)
+        if n == 3 and args.embeddings:
+            chosen = STAGES[n](ctx, [m.strip() for m in args.embeddings.split(",")])
+        else:
+            chosen = STAGES[n](ctx)
         log.info("stage %d chose %s", n, chosen["name"])
     return 0
 

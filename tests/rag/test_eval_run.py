@@ -131,3 +131,29 @@ def test_stage6_writes_operating_values_and_summary(ctx):
     assert "쿼리 형태" in md and "최종 k" in md and "임계값" in md and "시험용" in md
     summary = (run.RESULTS / "summary.md").read_text()
     assert "selected.json" in summary and "사람 검수" in summary
+
+
+def test_stage3_runs_only_named_models(ctx, monkeypatch):
+    monkeypatch.setattr(run, "REGISTRY", {n: FakeEmbedder for n in run.EMBEDDINGS})
+    run.stage3(ctx, ["bge-m3", "kure-v1"])
+    rows = json.loads((run.RESULTS / "03_embedding.json").read_text())["rows"]
+    assert [r["name"] for r in rows] == ["bge-m3", "kure-v1"]
+
+
+def test_cli_passes_embedding_subset(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(run, "Ctx", lambda: None)
+    monkeypatch.setitem(run.STAGES, 3, lambda ctx, names=run.EMBEDDINGS: seen.setdefault("names", names) and {"name": "x"})
+    run.main(["3", "--embeddings", "gemini-768,bge-m3"])
+    assert seen["names"] == ["gemini-768", "bge-m3"]
+
+
+class QuotaEmbedder(FakeEmbedder):
+    def encode(self, texts, kind):
+        raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+
+def test_embedding_info_survives_unmeasurable_latency(ctx, monkeypatch):
+    monkeypatch.setattr(run, "REGISTRY", {"gemini-768": QuotaEmbedder})
+    info = run.embedding_info("gemini-768", 4, ["소금"])
+    assert info["dims"] == 64 and info["query_ms"] == "n/a"
