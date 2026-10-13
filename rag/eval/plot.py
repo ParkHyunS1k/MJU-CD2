@@ -10,7 +10,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-plt.rcParams["font.family"] = ["AppleGothic", "Malgun Gothic", "NanumGothic", "DejaVu Sans"]
+_INSTALLED = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
+# 한글 글꼴 중 설치된 것만 넣는다(없는 이름은 막대마다 경고를 낸다)
+plt.rcParams["font.family"] = [f for f in ("AppleGothic", "Malgun Gothic", "NanumGothic") if f in _INSTALLED] + ["DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 

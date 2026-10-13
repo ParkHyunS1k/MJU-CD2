@@ -238,7 +238,7 @@ def stage6(ctx: Ctx) -> dict:
                       [f"recall@{final_k}", "ndcg@10", "mrr", f"ev_recall@{final_k}"], ctx.groups)]
     rejected = sum(float(row.max()) <= threshold for row in none_sims)
     sections.append(f"## 시험용 결과\n\n{table(rows)}\n\n정답 없는 쿼리 {len(none)}개 중 {rejected}개가 "
-                    f"임계값으로 걸러진다(조정용 1개 포함).")
+                    f"임계값으로 걸러진다. 임계값을 정할 때 이 {len(none)}개를 모두 썼으므로 시험용 검증이 아니다.")
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     (RESULTS / "06_operating.md").write_text("# 6단계: 운영값\n\n" + "\n\n".join(sections) + "\n", encoding="utf-8")
@@ -262,7 +262,7 @@ def _write_summary(state: dict, test_row: dict, n_none: int, rejected: int) -> N
         "",
         f"시험용 Recall@{k}: {cell(test_row[f'recall@{k}'])}, nDCG@10: {cell(test_row['ndcg@10'])}, "
         f"사람 검수 쿼리만: {cell(test_row[f'recall@{k} (사람 검수)'])}. "
-        f"정답 없는 쿼리 {n_none}개 중 {rejected}개를 임계값으로 거른다.",
+        f"정답 없는 쿼리 {n_none}개 중 {rejected}개를 임계값으로 거른다(임계값을 이 쿼리들로 정했으므로 검증된 값은 아니다).",
         "",
         "단계별 근거는 `01_parser.md` … `06_operating.md`. 1등과의 쿼리별 차이(쌍체 부트스트랩 95% 구간)가 0을 포함하면 "
         "더 단순·저렴한 구성을 골랐다.",
