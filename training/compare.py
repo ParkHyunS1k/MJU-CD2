@@ -46,6 +46,7 @@ _SCHEMA_PATH = _IO / "schema.json"
 _INSTR_PATH = _IO / "instructions.md"
 INSTRUCTIONS = "You are a helpful assistant. Answer the user's question directly."  # Codex 에이전트 지시문 대신(토큰 23k→14k)
 _setup_lock = threading.Lock()
+_files_ready = False
 PROMPT = """당신은 의료 위험도를 추정하는 도우미입니다.
 아래 사람의 정보만으로, 이 사람이 현재 각 질환에 해당할 확률을 0-100 정수로 답하세요.
 정보가 제한적이어도 반드시 최선의 추정치를 숫자로 답하세요.
@@ -209,14 +210,21 @@ class UsageLimitError(RuntimeError):
     """요금제 사용량 한도. 재시도해도 소용없으니 실행을 멈춘다."""
 
 
+def _ensure_codex_files() -> None:
+    """스키마와 지시문을 항상 새로 쓴다. 이전 실행이 남긴 파일 일부만 있어도 빠지는 파일이 없게 한다."""
+    _WORKDIR.mkdir(parents=True, exist_ok=True)
+    _SCHEMA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _SCHEMA_PATH.write_text(json.dumps(SCHEMA), encoding="utf-8")
+    _INSTR_PATH.write_text(INSTRUCTIONS, encoding="utf-8")
+
+
 def call_codex(prompt: str) -> tuple[str, int | None]:
     """codex exec 1회. 사용자 설정을 끄고 빈 폴더에서 stdin을 닫고 실행한다(닫지 않으면 멈춘다)."""
-    with _setup_lock:  # 여러 스레드가 동시에 스키마를 쓰지 않게 한다
-        if not _SCHEMA_PATH.exists():
-            _WORKDIR.mkdir(parents=True, exist_ok=True)
-            _IO.mkdir(parents=True, exist_ok=True)
-            _SCHEMA_PATH.write_text(json.dumps(SCHEMA), encoding="utf-8")
-            _INSTR_PATH.write_text(INSTRUCTIONS, encoding="utf-8")
+    global _files_ready
+    with _setup_lock:  # 프로세스마다 한 번, 다른 스레드가 읽기 전에 쓴다
+        if not _files_ready:
+            _ensure_codex_files()
+            _files_ready = True
     schema = _SCHEMA_PATH
     out = _IO / f"{uuid.uuid4().hex}.txt"
     r = subprocess.run(

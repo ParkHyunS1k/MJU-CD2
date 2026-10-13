@@ -214,3 +214,16 @@ def test_run_llm_stops_on_usage_limit(tmp_path):
     with pytest.raises(cmp.UsageLimitError):
         run_llm([(10, 0), (11, 0), (10, 1)], _people(), cache, caller=limited, workers=1)
     assert len(calls) == 1 and load_cache(cache) == {}
+
+
+def test_codex_files_written_even_if_schema_exists(tmp_path, monkeypatch):
+    io = tmp_path / "io"
+    io.mkdir()
+    monkeypatch.setattr(cmp, "_WORKDIR", tmp_path / "empty")
+    monkeypatch.setattr(cmp, "_SCHEMA_PATH", io / "schema.json")
+    monkeypatch.setattr(cmp, "_INSTR_PATH", io / "instructions.md")
+    (io / "schema.json").write_text("{}", encoding="utf-8")   # 이전 실행이 남긴 스키마만 있는 상태
+    cmp._ensure_codex_files()
+    assert (io / "instructions.md").read_text(encoding="utf-8") == cmp.INSTRUCTIONS
+    assert _json.loads((io / "schema.json").read_text(encoding="utf-8")) == cmp.SCHEMA
+    assert (tmp_path / "empty").is_dir()
