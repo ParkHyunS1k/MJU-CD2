@@ -24,6 +24,25 @@ NAMES = {"base": "⓪ 나이+성별", "rule": "① 체크리스트", "lr": "② 
 ML_MODELS = ["base", "rule", "lr", "xgb"]
 SUBGROUPS = {"25-34": (25, 34), "35-44": (35, 44)}
 MIN_POS = 10
+KEYS = ("hypertension", "diabetes", "cholesterol", "triglyceride")
+MODEL = "gpt-5.6-luna"
+REPEATS = 5
+REPEAT_N = 300
+PROMPT = """당신은 의료 위험도를 추정하는 도우미입니다.
+아래 사람의 정보만으로, 이 사람이 현재 각 질환에 해당할 확률을 0-100 정수로 답하세요.
+정보가 제한적이어도 반드시 최선의 추정치를 숫자로 답하세요.
+
+[정보]
+나이 {age}세, {sex}, BMI {bmi:.1f}, 체지방률 {pbf:.1f}%
+고혈압 가족력 {fh_hp}, 당뇨 가족력 {fh_dm}, 고지혈증 가족력 {fh_hl}
+
+[질환 정의]
+- hypertension(고혈압): 측정 혈압 140/90mmHg 이상 또는 혈압약 복용
+- diabetes(당뇨): 공복혈당 126mg/dL 이상, 당화혈색소 6.5% 이상, 의사 진단, 또는 약·인슐린 치료
+- cholesterol(고콜레스테롤): 총콜레스테롤 240mg/dL 이상 또는 약 복용
+- triglyceride(고중성지방): 12시간 이상 공복 시 중성지방 200mg/dL 이상"""
+EXAMPLE = {"age": 34, "female": 0, "bmi": 26.1, "body_fat_percentage": 27.4,
+           "fh_hypertension": 1, "fh_diabetes": 0, "fh_dyslipidemia": 0}
 
 FH_FOR = {"hypertension": "fh_hypertension", "diabetes": "fh_diabetes",
           "cholesterol": "fh_dyslipidemia", "triglyceride": "fh_dyslipidemia"}
@@ -101,10 +120,84 @@ def compare_disease(pred: pd.DataFrame, models: list[str]) -> dict:
     return res
 
 
+def build_prompt(row) -> str:
+    yn = lambda v: "있음" if v == 1 else "없음"
+    return PROMPT.format(age=int(row["age"]), sex="여성" if row["female"] == 1 else "남성",
+                         bmi=row["bmi"], pbf=row["body_fat_percentage"], fh_hp=yn(row["fh_hypertension"]),
+                         fh_dm=yn(row["fh_diabetes"]), fh_hl=yn(row["fh_dyslipidemia"]))
+
+
+def parse_response(text: str) -> dict[str, float] | None:
+    """출력 스키마를 따른 0–100 정수 4개면 0–1 확률로, 아니면 None(실패)."""
+    try:
+        d = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(d, dict) or set(d) != set(KEYS):
+        return None
+    if not all(type(d[k]) is int and 0 <= d[k] <= 100 for k in KEYS):
+        return None
+    return {k: d[k] / 100 for k in KEYS}
+
+
+def with_llm(pred: pd.DataFrame, cache: dict, key: str) -> tuple[pd.DataFrame, int]:
+    """1회차 GPT 확률을 붙인다. 실패·누락인 사람은 모든 모델 비교에서 뺀다."""
+    p = pd.Series({i: r["probs"][key] for (i, rep), r in cache.items() if rep == 0 and r["probs"]}, dtype=float)
+    out = pred.assign(llm=p.reindex(pred.index))
+    missing = int(out.llm.isna().sum())
+    return out.dropna(subset=["llm"]), missing
+
+
+def repeat_matrix(cache: dict, rep_ids: list[int], key: str) -> pd.DataFrame:
+    """반복 REPEATS회가 모두 성공한 사람만."""
+    rows = {}
+    for i in rep_ids:
+        recs = [cache.get((i, r)) for r in range(REPEATS)]
+        if all(rc and rc["probs"] for rc in recs):
+            rows[i] = [rc["probs"][key] for rc in recs]
+    return pd.DataFrame.from_dict(rows, orient="index", columns=range(REPEATS))
+
+
+def plot_consistency(preds: dict, cache: dict, rep_ids: list[int], path: Path, n_show: int = 40) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    keys = list(preds)
+    fig, axes = plt.subplots(1, len(keys), figsize=(4.5 * len(keys), 3.8), squeeze=False)
+    for ax, key in zip(axes[0], keys):
+        m = repeat_matrix(cache, rep_ids, key)
+        common = m.index.intersection(preds[key].index)
+        show = np.random.default_rng(SEED).choice(np.asarray(common), min(n_show, len(common)), replace=False)
+        lr = preds[key].lr.loc[show].sort_values()
+        x = np.arange(len(lr))
+        vals = m.loc[lr.index].to_numpy() * 100
+        ax.vlines(x, vals.min(axis=1), vals.max(axis=1), color="lightgray", lw=3)
+        for j in range(vals.shape[1]):
+            ax.scatter(x, vals[:, j], s=10, color="tab:orange", label="GPT (5 runs)" if j == 0 else None)
+        ax.scatter(x, lr.to_numpy() * 100, marker="D", s=18, color="tab:blue", label="ML (logistic)")
+        ax.set(title=key, xlabel="people (sorted by ML risk)", ylabel="predicted risk (%)", xticks=[])
+    axes[0][0].legend(loc="upper left", fontsize=8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
 def build_results(preds: dict[str, pd.DataFrame], cache: dict | None, rep_ids: list[int]) -> dict:
     res = {"date": date.today().isoformat(), "llm": None, "diseases": {}}
+    if cache is not None:
+        res["llm"] = {"model": MODEL, "calls": len(cache), "failed": sum(r["probs"] is None for r in cache.values()),
+                      "repeat_people": len(rep_ids), "prompt_example": build_prompt(EXAMPLE)}
     for key, pred in preds.items():
-        res["diseases"][key] = compare_disease(pred, ML_MODELS)
+        if cache is None:
+            res["diseases"][key] = compare_disease(pred, ML_MODELS)
+            continue
+        pred, missing = with_llm(pred, cache, key)
+        r = compare_disease(pred, ML_MODELS + ["llm"])
+        r["llm_missing"] = missing
+        thr = r["models"]["llm"]["at_spec"]["threshold"]
+        r["consistency"] = consistency_stats(repeat_matrix(cache, rep_ids, key).to_numpy(), thr)
+        res["diseases"][key] = r
     return res
 
 
@@ -140,6 +233,31 @@ def write_report(results: dict, path: Path) -> None:
         for g, sub in r["subgroups"].items():
             L.append(f"| {g} | {sub['n']} / {sub['n_pos']} | "
                      + " | ".join("표본 부족" if sub["auroc"][m] is None else _ci(sub["auroc"][m]) for m in ms) + " |")
+    if results["llm"]:
+        info = results["llm"]
+        L += ["", "## GPT 반복 응답 편차 (같은 입력 5회)", "",
+              f"모델 `{info['model']}`(Codex CLI). 무작위 {info['repeat_people']}명에게 같은 입력을 5회 넣었다. "
+              "판정 변경은 위 '같은 특이도' 기준값으로 5회 응답을 판정했을 때 양성·음성이 섞인 사람의 비율이다. "
+              "ML(②)은 결정적이라 모두 0이다.", "",
+              "| 질환 | 인원 | 표준편차 중앙값 / 90% (%p) | 범위 중앙값 / 최대 (%p) | 판정 변경 |",
+              "|---|---|---|---|---|"]
+        for key, r in results["diseases"].items():
+            c = r["consistency"]
+            if c["n"] == 0:
+                L.append(f"| {DISEASES[key]} | 0 | - | - | - |")
+                continue
+            L.append(f"| {DISEASES[key]} | {c['n']} | {c['sd_median']:.1f} / {c['sd_p90']:.1f} | "
+                     f"{c['range_median']:.1f} / {c['range_max']:.1f} | {_pct(c['flip_rate'])} |")
+        L += ["", "![consistency](figures/llm_consistency.png)", "",
+              "## 한계", "",
+              f"- GPT 호출 {info['calls']}회 중 실패 {info['failed']}회. 1회차가 실패한 사람"
+              f"({', '.join(f'{DISEASES[k]} {r["llm_missing"]}명' for k, r in results['diseases'].items())})은 "
+              "모든 모델의 비교에서 뺐다.",
+              "- Codex CLI는 에이전트 시스템 프롬프트를 붙인다. 일반 ChatGPT 대화와 조건이 같지 않다.",
+              "- 프롬프트는 아래 1개로 고정했다. 이 실험은 LLM의 상한이 아니라, 같은 정보로 일반적인 질문을 했을 때를 측정한다.",
+              "- KNHANES 참가자의 입력 7개(ID·연도·라벨 제외)를 외부 LLM으로 보냈다. 이용약관 판단은 사용자가 했다(2026-10-13).",
+              "- 단면 자료라서 '현재 유병일 확률'을 비교한 것이다.",
+              "", "## 프롬프트 원문 (예시 입력)", "", "```", info["prompt_example"], "```"]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(L) + "\n", encoding="utf-8")
 

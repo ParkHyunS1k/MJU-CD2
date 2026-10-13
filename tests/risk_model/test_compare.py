@@ -68,3 +68,72 @@ def test_report_without_llm(knhanes_like, tmp_path):
     write_report(res, out)
     text = out.read_text(encoding="utf-8")
     assert "## 요약" in text and "② 배포 로지스틱" in text and "④ GPT" not in text
+
+
+from training.compare import KEYS, REPEATS, parse_response, plot_consistency, repeat_matrix, with_llm
+
+
+def test_parse_response_accepts_valid():
+    assert parse_response('{"hypertension": 15, "diabetes": 3, "cholesterol": 8, "triglyceride": 100}') == \
+        {"hypertension": 0.15, "diabetes": 0.03, "cholesterol": 0.08, "triglyceride": 1.0}
+
+
+def test_parse_response_rejects_bad_output():
+    bad = ['{"hypertension": -1, "diabetes": -1, "cholesterol": -1, "triglyceride": -1}',
+           '{"hypertension": 101, "diabetes": 3, "cholesterol": 8, "triglyceride": 1}',
+           '{"hypertension": 15, "diabetes": 3, "cholesterol": 8}',
+           '{"hypertension": 15.5, "diabetes": 3, "cholesterol": 8, "triglyceride": 1}',
+           '{"hypertension": true, "diabetes": 3, "cholesterol": 8, "triglyceride": 1}',
+           "확률을 추정할 수 없습니다.", ""]
+    assert all(parse_response(t) is None for t in bad)
+
+
+def _rec(idx, rep, probs):
+    return {"idx": idx, "rep": rep, "probs": probs, "error": None if probs else "x", "tokens": 1, "seconds": 1.0}
+
+
+def _fake_cache(preds, rep_ids, noise=0.05):
+    """②의 예측에 잡음을 더한 가짜 GPT 응답."""
+    rng = np.random.default_rng(1)
+    ids = sorted(set().union(*(p.index for p in preds.values())))
+    cache = {}
+    for i in ids:
+        for rep in range(REPEATS if i in rep_ids else 1):
+            probs = {k: float(np.clip((preds[k].lr.get(i, 0.1) if k in preds else 0.1) + rng.normal(0, noise), 0, 1))
+                     for k in KEYS}
+            cache[(int(i), rep)] = _rec(int(i), rep, probs)
+    return cache
+
+
+def test_with_llm_drops_missing_rows(knhanes_like):
+    pred = disease_predictions(knhanes_like, "hypertension", False)
+    cache = _fake_cache({"hypertension": pred}, [])
+    first, second = pred.index[0], pred.index[1]
+    cache[(int(first), 0)] = _rec(int(first), 0, None)
+    del cache[(int(second), 0)]
+    out, missing = with_llm(pred, cache, "hypertension")
+    assert missing == 2 and first not in out.index and second not in out.index
+    assert len(out) == len(pred) - 2
+
+
+def test_repeat_matrix_requires_all_reps():
+    full = {k: 0.1 for k in KEYS}
+    cache = {(1, r): _rec(1, r, full) for r in range(REPEATS)}
+    cache.update({(2, r): _rec(2, r, full) for r in range(REPEATS - 1)})        # 반복 하나 누락
+    cache.update({(3, r): _rec(3, r, full if r else None) for r in range(REPEATS)})  # 1회 실패
+    m = repeat_matrix(cache, [1, 2, 3], "diabetes")
+    assert m.index.tolist() == [1] and m.shape == (1, REPEATS)
+
+
+def test_report_and_plot_with_llm(knhanes_like, tmp_path):
+    preds = {k: disease_predictions(knhanes_like, k, False) for k in ("hypertension", "diabetes")}
+    rep_ids = [int(i) for i in preds["hypertension"].index[:60]]
+    cache = _fake_cache(preds, rep_ids)
+    res = build_results(preds, cache, rep_ids)
+    h = res["diseases"]["hypertension"]
+    assert "llm" in h["models"] and h["consistency"]["n"] == 60 and h["llm_missing"] == 0
+    write_report(res, tmp_path / "c.md")
+    text = (tmp_path / "c.md").read_text(encoding="utf-8")
+    assert "④ GPT" in text and "반복 응답 편차" in text and "프롬프트 원문" in text
+    plot_consistency(preds, cache, rep_ids, tmp_path / "fig.png")
+    assert (tmp_path / "fig.png").exists()
