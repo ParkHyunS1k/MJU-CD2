@@ -45,7 +45,8 @@ def save_state(state: dict) -> None:
 
 def chunk_variant(parser: str, spacing: bool, max_chars: int, overlap: int, chunker: str = "chars") -> list[dict]:
     suffix = "" if chunker == "chars" else f"-{chunker}"
-    path = VARIANTS / f"{parser}-{'spaced' if spacing else 'raw'}-{max_chars}-{overlap}{suffix}.jsonl"
+    spacing_name = {False: "raw", True: "spaced", "auto": "autospaced"}[spacing]
+    path = VARIANTS / f"{parser}-{spacing_name}-{max_chars}-{overlap}{suffix}.jsonl"
     if not path.exists():
         records, stats = ingest(SOURCES, RAW, max_chars, overlap, parser, spacing, chunker=chunker)
         log.info("%s: %s", path.name, json.dumps(stats, ensure_ascii=False))

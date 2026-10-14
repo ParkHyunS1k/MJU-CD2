@@ -195,3 +195,10 @@ def test_cli_state_and_results_paths(tmp_path, monkeypatch):
     monkeypatch.setitem(run.STAGES, 4, lambda ctx: seen.update(state=run.STATE, results=run.RESULTS) or {"name": "x"})
     run.main(["4", "--state", str(tmp_path / "s.json"), "--results", str(tmp_path / "r")])
     assert seen == {"state": tmp_path / "s.json", "results": tmp_path / "r"}
+
+
+def test_chunk_variant_auto_spacing_has_own_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "VARIANTS", tmp_path)
+    monkeypatch.setattr(run, "ingest", lambda *a, **k: ([{"content": "x"}], {}))
+    run.chunk_variant("pymupdf", "auto", 1200, 0, "paragraph")
+    assert (tmp_path / "pymupdf-autospaced-1200-0-paragraph.jsonl").exists()

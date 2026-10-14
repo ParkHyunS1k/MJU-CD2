@@ -160,3 +160,13 @@ def test_ingest_paragraph_chunkers(tmp_path, make_pdf):
     assert len(single) == 1  # 두 문단 모두 80자 미만이라 하나로 붙는다
     with pytest.raises(KeyError):
         ingest(sources, tmp_path, chunker="nope")
+
+
+def test_ingest_auto_spacing_only_for_documents_without_spaces(tmp_path, make_pdf):
+    make_pdf("nospace.pdf", [[(100, "나트륨섭취를줄이고규칙적으로운동한다.")]])
+    make_pdf("spaced.pdf", [[(100, "나트륨 섭취를줄이고 규칙적으로 운동한다.")]])
+    sources = _sources(tmp_path, [_entry("nospace", "nospace.pdf"), _entry("spaced", "spaced.pdf")])
+    records, _ = ingest(sources, tmp_path, spacing="auto")
+    body = {r["doc_id"]: r["content"].split("\n", 1)[1] for r in records}
+    assert body["nospace"] == "나트륨 섭취를 줄이고 규칙적으로 운동한다."
+    assert body["spaced"] == "나트륨 섭취를줄이고 규칙적으로 운동한다."  # 공백이 있는 문서는 그대로
