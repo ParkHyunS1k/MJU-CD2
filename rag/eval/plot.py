@@ -40,5 +40,10 @@ def main(results: Path = Path("rag/eval/results")) -> int:
     return 0
 
 
+def cli() -> int:
+    """`python -m rag.eval.plot [결과 폴더]` — 폴더를 주지 않으면 rag/eval/results."""
+    return main(Path(sys.argv[1])) if len(sys.argv) > 1 else main()
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli())
