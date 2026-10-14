@@ -25,3 +25,4 @@ rag/data/
 rag/eval/cache/
 rag/eval/data/review_items.json
 rag/eval/data/review_decisions.json
+rag/eval/data/augment_*.json

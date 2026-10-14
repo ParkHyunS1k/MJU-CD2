@@ -1,7 +1,7 @@
 # RAG 검색 구성 비교 보고서
 
 - 작성일: 2026-10-14
-- 설계: `docs/superpowers/specs/2026-10-11-rag-eval-design.md`
+- 설계: `docs/superpowers/specs/2026-10-08-rag-report-design.md` 10.1절
 - 최종 설정: `rag/eval/selected.json` (하위 프로젝트 3의 입력)
 - 단계별 원자료: `results/02_chunking.*`(공통 2단계), `results/paragraph/`(최종 구성), `results/single/`(비교용 "문단 하나씩")
 
