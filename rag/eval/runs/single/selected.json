@@ -9,6 +9,6 @@
   "hybrid": false,
   "reranker": null,
   "query_form": "keyword",
-  "final_k": 2,
-  "threshold": 0.6088
+  "final_k": 13,
+  "threshold": 0.6125
 }
