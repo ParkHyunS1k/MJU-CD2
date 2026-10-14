@@ -185,3 +185,13 @@ def test_stage2_includes_paragraph_chunkers(ctx):
     cfgs = [r["cfg"] for r in saved["rows"]]
     assert {"chunker": "paragraph", "max_chars": 1200, "overlap": 0, "embedding_model": "bge-m3"} in cfgs
     assert cfgs[-1]["chunker"] == "paragraph-single"
+
+
+def test_cli_state_and_results_paths(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(run, "STATE", run.STATE)  # main()이 바꾼 경로를 테스트 뒤 되돌린다
+    monkeypatch.setattr(run, "RESULTS", run.RESULTS)
+    monkeypatch.setattr(run, "Ctx", lambda: None)
+    monkeypatch.setitem(run.STAGES, 4, lambda ctx: seen.update(state=run.STATE, results=run.RESULTS) or {"name": "x"})
+    run.main(["4", "--state", str(tmp_path / "s.json"), "--results", str(tmp_path / "r")])
+    assert seen == {"state": tmp_path / "s.json", "results": tmp_path / "r"}

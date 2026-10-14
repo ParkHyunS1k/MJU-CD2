@@ -45,6 +45,7 @@ def test_eval_cache_key_changes_with_texts(tmp_path):
 def test_registry_names():
     assert set(REGISTRY) == {
         "gemini-768", "gemini-1536", "gemini-3072", "bge-m3", "kure-v1", "qwen3-0.6b", "e5-large-instruct",
+        "openai-small", "openai-large", "openai-large-1024",
     }
 
 
@@ -126,3 +127,31 @@ def test_cache_write_failure_keeps_previous_cache(tmp_path, monkeypatch):
     inner = RecordingEmbedder()
     CachedEmbedder(inner, tmp_path).encode(["가"], "doc")
     assert inner.seen == []
+
+
+class _FakeOpenAIEmbeddings:
+    def __init__(self):
+        self.calls = []
+
+    def create(self, model, input, dimensions):
+        from types import SimpleNamespace
+
+        self.calls.append((model, list(input), dimensions))
+        return SimpleNamespace(data=[SimpleNamespace(embedding=[float(len(t)), 0.0, 1.0][:dimensions]) for t in input])
+
+
+def test_openai_embedder_batches_and_normalizes():
+    from types import SimpleNamespace
+
+    from rag.eval.embedders import OpenAIEmbedder
+
+    fake = _FakeOpenAIEmbeddings()
+    emb = OpenAIEmbedder("text-embedding-3-small", 3, client=SimpleNamespace(embeddings=fake), batch=2)
+    out = emb.encode(["가", "나다", "라마바"], "doc")
+    assert [c[1] for c in fake.calls] == [["가", "나다"], ["라마바"]]
+    assert all(c[0] == "text-embedding-3-small" and c[2] == 3 for c in fake.calls)
+    assert np.allclose(np.linalg.norm(out, axis=1), 1.0) and emb.name == "openai-small-3"
+
+
+def test_registry_has_openai_candidates():
+    assert {"openai-small", "openai-large", "openai-large-1024"} <= set(REGISTRY)

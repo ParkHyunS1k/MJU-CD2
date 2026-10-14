@@ -132,7 +132,8 @@ def stage2(ctx: Ctx) -> dict:
 
 
 RERANKER_NAMES = list(RERANKERS)
-EMBEDDINGS = ["gemini-768", "bge-m3", "kure-v1", "qwen3-0.6b", "e5-large-instruct", "gemini-1536", "gemini-3072"]
+EMBEDDINGS = ["gemini-768", "bge-m3", "kure-v1", "qwen3-0.6b", "e5-large-instruct", "openai-large-1024",
+              "gemini-1536", "openai-small", "gemini-3072", "openai-large"]
 
 
 def embedding_info(name: str, n_chunks: int, sample: list[str]) -> dict:
@@ -298,7 +299,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="RAG 검색 구성 실험 (계획 B)")
     parser.add_argument("stages", nargs="+", type=int, choices=sorted(STAGES))
     parser.add_argument("--embeddings", help="3단계에서 비교할 모델(쉼표 구분). 기본은 EMBEDDINGS 전부")
+    parser.add_argument("--state", type=Path, help="selected.json 대신 쓸 상태 파일(같은 단계를 다른 기준으로 따로 돌릴 때)")
+    parser.add_argument("--results", type=Path, help="결과 폴더(기본 rag/eval/results)")
     args = parser.parse_args(argv)
+    global STATE, RESULTS
+    STATE, RESULTS = args.state or STATE, args.results or RESULTS
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ctx = Ctx()
     for n in args.stages:

@@ -79,6 +79,30 @@ class GeminiEmbedder:
         return l2_normalize(np.array(rows))
 
 
+class OpenAIEmbedder:
+    """OpenAI 유료 임베딩(text-embedding-3-*). 차원은 dimensions로 줄인다. .env의 OPENAI_API_KEY를 쓴다."""
+
+    def __init__(self, model: str, dims: int, client=None, batch: int = 100):
+        self.model = model
+        self.dims = dims
+        self.name = f"openai-{model.rsplit('-', 1)[-1]}-{dims}"
+        self.batch = batch
+        self._client = client
+
+    def encode(self, texts: list[str], kind: str) -> np.ndarray:
+        if self._client is None:
+            from dotenv import load_dotenv
+            from openai import OpenAI
+
+            load_dotenv(".env")
+            self._client = OpenAI(max_retries=6)  # 분당 한도(429)는 SDK가 지수 대기 후 재시도
+        rows = []
+        for i in range(0, len(texts), self.batch):
+            res = self._client.embeddings.create(model=self.model, input=texts[i : i + self.batch], dimensions=self.dims)
+            rows.extend(d.embedding for d in res.data)
+        return l2_normalize(np.array(rows))
+
+
 class STEmbedder:
     def __init__(self, name: str, model_id: str, query_prefix: str = "", doc_prefix: str = "",
                  query_prompt_name: str | None = None):
@@ -106,6 +130,9 @@ REGISTRY: dict[str, Callable[[], Embedder]] = {
     "gemini-768": lambda: GeminiEmbedder(768),
     "gemini-1536": lambda: GeminiEmbedder(1536),
     "gemini-3072": lambda: GeminiEmbedder(3072),
+    "openai-small": lambda: OpenAIEmbedder("text-embedding-3-small", 1536),
+    "openai-large": lambda: OpenAIEmbedder("text-embedding-3-large", 3072),
+    "openai-large-1024": lambda: OpenAIEmbedder("text-embedding-3-large", 1024),
     "bge-m3": lambda: STEmbedder("bge-m3", "BAAI/bge-m3"),
     "kure-v1": lambda: STEmbedder("kure-v1", "nlpai-lab/KURE-v1"),
     "qwen3-0.6b": lambda: STEmbedder("qwen3-0.6b", "Qwen/Qwen3-Embedding-0.6B", query_prompt_name="query"),
