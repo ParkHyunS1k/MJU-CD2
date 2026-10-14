@@ -115,6 +115,8 @@ def run_stage(ctx: Ctx, fname: str, title: str, variants: list[tuple[str, dict]]
 def stage1(ctx: Ctx) -> dict:
     variants = [(f"{p}{' + 띄어쓰기' if s else ''}", {"parser": p, "spacing": s})
                 for p in ("pymupdf", "pdfplumber") for s in (False, True)]
+    # 공백이 거의 없는 문서(고혈압 지침)만 복원. 전체 복원보다 단순·안전하므로 전체 복원보다 앞에 둔다
+    variants.insert(1, ("pymupdf + 띄어쓰기(공백 없는 문서만)", {"parser": "pymupdf", "spacing": "auto"}))
     return run_stage(
         ctx, "01_parser", "1단계: 파서", variants, BUDGET_PRIMARY,
         extra=lambda cfg, chunks: {"preservation": preservation(chunks, ctx.queries, ctx.labels)},

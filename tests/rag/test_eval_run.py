@@ -66,7 +66,8 @@ def test_stage1_writes_results_and_state(ctx):
     md = (run.RESULTS / "01_parser.md").read_text()
     assert "preservation" in md and "**선택: pymupdf**" in md
     saved = json.loads((run.RESULTS / "01_parser.json").read_text())
-    assert saved["primary"] == "ev_recall@budget" and len(saved["rows"]) == 4
+    assert saved["primary"] == "ev_recall@budget" and len(saved["rows"]) == 5
+    assert saved["rows"][1]["cfg"] == {"parser": "pymupdf", "spacing": "auto"}
 
 
 def test_stage2_varies_chunking(ctx):
