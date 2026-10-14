@@ -3,6 +3,7 @@
 `../models/{hypertension,cholesterol,diabetes,triglyceride}.pkl`을 만든다. 서버는 `app/services/prediction_service.py`에서 이 파일을 읽는다.
 설계: `docs/superpowers/specs/2026-10-12-risk-model-redesign-design.md`
 최근 평가: `reports/eval-2026-10-12.md`
+비교실험(규칙표·ML·GPT): `reports/model-comparison-2026-10-13.md`
 
 | 파일 | 역할 |
 | --- | --- |

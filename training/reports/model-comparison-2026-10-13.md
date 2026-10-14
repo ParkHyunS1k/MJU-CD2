@@ -1,7 +1,6 @@
 # 위험 예측 방식 비교실험 결과 (2026-10-13)
 
-- 설계: `docs/superpowers/specs/2026-10-13-model-comparison-design.md`
-- 계획: `docs/superpowers/plans/2026-10-13-model-comparison.md`
+- 설계: `docs/superpowers/specs/2026-10-12-risk-model-redesign-design.md` 11절
 - 원본 수치: `compare-metrics.json`(2절), `compare-llm-gpt-5.6-luna-metrics.json`(3절)
 - 실행 코드 `training/compare.py`는 결과를 만든 뒤 삭제했다(a4ceede). 마지막 버전은 `git show 01d8474:training/compare.py`로 볼 수 있다.
 

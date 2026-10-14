@@ -1,9 +1,14 @@
 # 성인병 위험 예측 모델 재설계
 
-- 작성일: 2026-10-12
-- 상태: 검토 대기
-- 범위: ① 학습·평가 파이프라인(`training/`), ② 백엔드 예측 서비스(`app/services/prediction_service.py`)
-- 범위 밖: ③ 가족력·키 저장(Supabase `users` 칼럼, `/users/me` 스키마), ④ 모바일 입력 화면. 별도 설계로 진행한다.
+- 작성일: 2026-10-12 (최종 수정 2026-10-14)
+- 상태: 구현·배포 완료(2026-10-12). 예측 모델에 관한 설계·결정은 이 문서 하나에 모은다.
+- 범위: ① 학습·평가 파이프라인(`training/`), ② 백엔드 예측 서비스(`app/services/prediction_service.py`), ③ 가족력 저장(`users.fh_*`, 6.2절), 비교실험(11절)
+- 범위 밖: ④ 모바일 가족력 입력 화면
+- 관련 문서
+  - 평가 결과: `training/reports/eval-2026-10-12.md` (`python -m training.evaluate`가 생성)
+  - 비교실험 결과: `training/reports/model-comparison-2026-10-13.md`
+  - 실행 방법·모델 파일 형식: `training/README.md`
+  - 구현 계획(실행 완료, 삭제): `git show e470826:docs/superpowers/plans/2026-10-12-risk-model-redesign.md`, `git show 2eb87e6:docs/superpowers/plans/2026-10-13-model-comparison.md`
 
 ## 1. 배경과 목표
 
@@ -314,22 +319,31 @@ BMI + 체지방률을 채택했다. 성능이 4개 조합과 같고, 두 값 모
 - `inbody_analysis_service`, `trend_service`, `schemas/inbody.py`: 변경 없음.
 - 저장된 `ai_report`: 형식이 같아서 그대로 표시된다.
 - **RAG**: 요인 이름이 "나이", "BMI", "체지방률", "고혈압/당뇨/고지혈증 가족력"으로 바뀐다. RAG 용어집 `FEATURES`에 매핑을 추가해야 한다(RAG 작업 목록으로 넘긴다).
-- **③ 범위**: 가족력 칼럼 이름은 `fh_hypertension`, `fh_diabetes`, `fh_dyslipidemia`(boolean)를 쓰기로 한다. 프로필 키도 3.3을 따른다.
+- **③ 가족력 저장(완료)**: `users`에 `fh_hypertension`, `fh_diabetes`, `fh_dyslipidemia`(boolean, null = 모름) 칼럼을 추가했다(`supabase/migrations/20261012080457_add_family_history_to_users.sql`). `/users/me` 스키마에 같은 필드를 넣었고, `PATCH`는 보낸 필드만 저장한다(null 포함). 키는 받지 않는다(입력 7개에 키가 없다).
 
 ## 7. 테스트
 
+`tests/risk_model/`, `tests/test_users_router.py`.
+
 | 파일 | 내용 |
 |---|---|
-| `tests/test_prediction_service.py` | 임시 폴더에 합성 데이터로 학습한 v2 pkl을 두고 검사한다. 출력 키와 형식, 기준값에 따른 등급, **기여 합 = logit(p) − logit(기준점 예측)**, `fh_*` 기본값 0, BMI 누락 시 건너뜀, 성별 제외, 19세 미만 예외, 버전·피처 불일치 시 로드 실패 |
-| 같은 파일 | 실제 `models/*.pkl`이 있으면 예시 프로필 하나로 4개 질환 예측이 나오는지 확인한다 |
-| `tests/test_training.py` | `build_labels`(`HE_HP` 4→1, 3→0 등), `choose_thresholds`(작은 배열에서 Youden·95% 백분위 지점, high ≤ medium 시 실패) |
+| `test_features.py` | `build_labels`(`HE_HP` 4→1, 3→0 등), 가족력 결측 처리, `choose_thresholds`(Youden·95% 백분위 지점, high ≤ medium 시 실패) |
+| `test_model.py`, `test_train_cli.py` | v2 번들 키, 스플라인 `feature_groups`, `--only`·`--age-spline` |
+| `test_metrics.py`, `test_evaluate.py` | 신뢰구간·보정·등급 지표, 통과 기준 판정, 보고서 생성 |
+| `test_external.py` | NHANES·Kaggle 로더(KNHANES 라벨 정의 적용) |
+| `test_prediction_service.py` | 합성 데이터로 학습한 v2 pkl로 출력 형식, 등급, **기여 합 = logit(p) − logit(기준점 예측)**, 가족력 기본값 0과 요인 표시 규칙, 입력 범위, 19세 미만 예외, 버전·피처 불일치 시 로드 실패. 실제 `models/*.pkl`로 4개 질환 예측 |
+| `test_users_router.py` | `PATCH /users/me`의 부분 수정과 null 저장 |
 
-## 8. 배포 순서
+## 8. 배포 기록
 
-1. `python training/train.py` → `python training/evaluate.py` → 5.4 통과 여부를 확인한다.
-2. 통과한 질환만 `python -m training.train --only ...`으로 저장한다. 그 pkl과 평가 보고서를 커밋하고, 기존 pkl 7개와 `retrain_final.py`를 삭제한다. 통과하지 못한 질환은 `models/`에 파일이 남지 않게 한다.
-3. `prediction_service`를 교체하고 테스트를 통과시킨다.
-4. `back` 브랜치에 push한다 → Railway에 배포된다.
+2026-10-12에 다음 순서로 배포했다(`731197a`, 가족력 결측 제외 재학습 `a94abae`).
+
+1. `python -m training.evaluate` → 네 질환 모두 5.4 통과.
+2. `python -m training.train --only hypertension cholesterol diabetes triglyceride --age-spline cholesterol`. 기존 pkl 7개와 `retrain_final.py`는 삭제했다.
+3. `prediction_service` 교체, 테스트 통과.
+4. `back` push → Railway 배포.
+
+재학습할 때도 같은 순서를 따른다. 통과하지 못한 질환은 `models/`에 파일이 남지 않게 한다.
 
 기존 pkl의 Git 이력에 남은 데이터 행은 저장소가 비공개인 동안 그대로 둔다. 공개 전에 이력 정리 여부를 결정한다.
 
@@ -374,3 +388,45 @@ KNHANES에서 검사 수치를 제외한 변수를 앱 수집 가능성과 무�
 변수를 3배 넘게 늘려도 설명력은 거의 오르지 않았다. 한계는 피처 선택이 아니라 정보의 종류에 있다. 공복혈당은 인슐린 분비, 유전, 직전 식사처럼 체성분에 드러나지 않는 요인에 좌우된다. 현행 입력 7개는 이미 이 데이터로 얻을 수 있는 상한 근처다. 3.4절의 분류 비교에서도 허리둘레·생활습관을 더했을 때 AUROC 증가는 0.00–0.02였다.
 
 **의미**: 성능을 크게 높이려면 피처를 다시 고르는 것으로는 부족하다. 사용자가 입력하는 건강검진 수치(이 경우 예측 없이 진료지침 기준으로 직접 판정한다)나 반복 측정의 변화량처럼 정보의 종류를 바꿔야 한다. 둘 다 별도 설계 대상이다.
+
+## 11. 비교실험: 규칙표 · ML · LLM (2026-10-13)
+
+계획 발표에서 받은 두 지적에 답하기 위한 실험이다. 결과 전문은 `training/reports/model-comparison-2026-10-13.md`에 있다. 실행 코드 `training/compare.py`는 결과를 만든 뒤 삭제했다(`a4ceede`, 마지막 버전 `git show 01d8474:training/compare.py`).
+
+1. "표나 수식으로 보면 되는데 왜 학습한 모델이 필요한가"
+2. "ChatGPT에 수치를 넣고 물어보는 것보다 무엇이 나은가." LLM은 같은 입력에도 매번 다른 퍼센트를 낸다.
+
+### 11.1 설정
+
+| 항목 | 결정 |
+|---|---|
+| 코호트·라벨·입력 | 배포 모델과 같다(`training_rows`, 3절). 25–44세에서 평가한다 |
+| ML 예측 | 5.1의 바깥 5-fold 예측. 평가 대상은 학습에 들어가지 않는다 |
+| 비교 모델 | ⓪ 나이+성별 로지스틱, ① 체크리스트 점수, ② 배포 로지스틱, ③ XGBoost, ④ GPT 제로샷 |
+| ① 체크리스트 | BMI 25 이상, 체지방률 남 25%·여 30% 이상, 해당 질환 가족력, 40세 이상을 각 1점(0–4점). 학습하지 않는다 |
+| ④ GPT | Codex CLI(`codex exec`, ChatGPT 계정), `gpt-5.6-luna`, reasoning low, 출력 스키마(질환 4개 × 0–100 정수). 사람당 1회 호출. 프롬프트에 3.2절 라벨 정의를 넣어 ML과 같은 대상을 예측하게 했다 |
+| GPT 표본 | 시범 20회에 5시간 한도 4%를 써서 줄였다. AUROC는 무작위 500명(seed 42), 반복 편차는 그중 40명 × 5회. 비교용으로 `gpt-5.6-terra`도 반복 편차만 측정 |
+| 지표 | AUROC(부트스트랩 CI), ② 대비 짝지은 부트스트랩 차이 CI, AUPRC, Brier, 평균 예측, ②의 '보통 이상' 특이도에 맞춘 민감도, 반복 응답 표준편차와 등급이 바뀌는 사람 비율 |
+| 데이터 전송 | 입력 7개만 OpenAI로 보냈다. ID·조사연도·라벨은 보내지 않았다. 허용 여부는 사용자가 판단했다(2026-10-13) |
+
+다음 항목은 처음 제안(핸드오프)과 다르게 정했다.
+
+| 처음 제안 | 결정 | 이유 |
+|---|---|---|
+| 2022–23 학습, 2024 테스트 | 중첩 CV | 2024년 체성분검사는 40세 이상만 했다. 30대가 테스트셋에 0명이 된다 |
+| 미진단자 + 측정치 라벨, 생활습관 입력 | 배포 모델 라벨·입력 | 방어할 대상은 배포한 모델이다. 생활습관은 3.4절에서 기각했다 |
+| LightGBM, DeLong 검정 | XGBoost, 짝지은 부트스트랩 | 기존 평가와 같은 방식으로 맞췄다 |
+
+### 11.2 결론
+
+- **① 대비 ②**: AUROC가 0.03–0.12 높고, 네 질환 모두 차이 CI가 0을 넘는다. 비슷한 특이도에서 민감도가 크게 높다(고중성지방 34% → 79%). 체크리스트는 확률을 낼 수 없다.
+- **③ 대비 ②**: 같거나 ②가 약간 높다. 단순한 모델로 충분하다.
+- **④ 대비 ②**: AUROC 차이는 네 질환 모두 유의하지 않다(당뇨는 GPT가 +0.044, CI 0.000–0.106). 차이는 재현성이다. 같은 입력 5회에 앱 등급이 한 번이라도 바뀌는 사람이 질환별 12.5–32.5%였다. terra도 마찬가지였다. ML은 항상 같은 값을 낸다.
+- 그래서 "확률은 ML이 결정적으로 계산하고, LLM은 기여 요인을 받아 설명만 한다"는 서비스 구조를 유지한다.
+- **하지 않을 주장**: "ML이 GPT보다 정확하다." 이 데이터는 뒷받침하지 않는다.
+
+### 11.3 한계
+
+- 프롬프트 1개로 고정했다. LLM의 상한이 아니라 "같은 정보로 일반적인 질문을 했을 때"를 측정했다.
+- Codex는 순수 채팅이 아니다. 에이전트 지시문 대신 짧은 지시문을 넣었지만 일반 ChatGPT 대화와 조건이 조금 다르다.
+- GPT 표본 500명에서 당뇨 양성이 약 18명이라 ④의 신뢰구간이 넓다.
