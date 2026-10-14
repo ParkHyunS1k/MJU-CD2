@@ -108,11 +108,12 @@ def test_stage4_and_stage5(ctx, monkeypatch):
     assert json.loads(run.STATE.read_text())["reranker"] is None
 
 
-def test_choose_k():
-    # 0.9 × Recall@10(0.95) = 0.855 → k=5(0.85) 미달, k=6(0.9)이 처음 넘는다
-    recall = dict(zip(range(1, 11), [0.2, 0.5, 0.7, 0.8, 0.85, 0.9, 0.9, 0.95, 0.95, 0.95]))
-    assert run.choose_k(recall) == 6
-    assert run.choose_k(dict.fromkeys(range(1, 11), 0.0)) == 1
+def test_choose_k_fills_char_budget():
+    # k는 청크 길이 중앙값으로 3,600자 예산을 채우는 개수(최소 1)
+    assert run.choose_k([1000, 1100, 1200]) == 3
+    assert run.choose_k([180] * 10) == 20
+    assert run.choose_k([5000, 6000]) == 1
+    assert run.choose_k([10] * 3) == run.DEPTH  # 검색은 상위 DEPTH개까지만 한다
 
 
 def test_choose_threshold_caps_to_keep_answers():
@@ -126,7 +127,7 @@ def test_stage6_writes_operating_values_and_summary(ctx):
     run.stage6(ctx)
     state = json.loads(run.STATE.read_text())
     assert state["query_form"] in ("keyword", "question")
-    assert 1 <= state["final_k"] <= 10
+    assert 1 <= state["final_k"] <= run.DEPTH
     assert isinstance(state["threshold"], float)
     md = (run.RESULTS / "06_operating.md").read_text()
     assert "쿼리 형태" in md and "최종 k" in md and "임계값" in md and "시험용" in md

@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 import math
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -177,8 +178,10 @@ def stage5(ctx: Ctx) -> dict:
         note="rerank_ms는 쿼리 하나의 상위 20개 재정렬 시간(모델 로드 제외). 청크는 512토큰에서 잘린다.")
 
 
-def choose_k(recall: dict[int, float], ratio: float = 0.9) -> int:
-    return next(k for k in sorted(recall) if recall[k] >= ratio * recall[10])
+def choose_k(chunk_lengths: list[int], budget: int = 3600) -> int:
+    """청크 길이 중앙값으로 글자 수 예산을 채우는 개수. 1·2단계가 같은 예산으로 비교했으므로 운영도 같은 양을 넣는다.
+    (2026-10-14 변경: "Recall@k ≥ 0.9 × Recall@10"은 1등 청크만 맞혀도 k=1을 골라 근거의 17%만 넘겼다.)"""
+    return min(DEPTH, max(1, int(budget // statistics.median(chunk_lengths))))
 
 
 def choose_threshold(none_top: list[float], hit_scores: list[float], keep: float = 0.9) -> float:
@@ -222,13 +225,13 @@ def stage6(ctx: Ctx) -> dict:
     ranked, sims = retrieve(state, chunks, texts(tune))
     per_query = evaluate(chunks, tune, ctx.labels, ranked, ks=range(1, 11))
     recall = {k: float(np.mean([p[f"recall@{k}"] for p in per_query])) for k in range(1, 11)}
-    final_k = choose_k(recall)
+    final_k = choose_k([len(c["content"]) for c in chunks])
     k_table = "\n".join([
         "| k | " + " | ".join(str(k) for k in recall) + " |",
         "|---" * (len(recall) + 1) + "|",
         "| Recall@k | " + " | ".join(f"{v:.3f}" for v in recall.values()) + " |",
     ])
-    sections.append(f"## 최종 k (조정용)\n\n{k_table}\n\n**선택: k = {final_k}** (Recall@k ≥ 0.9 × Recall@10 인 최소 k)")
+    sections.append(f"## 최종 k (조정용)\n\n{k_table}\n\n**선택: k = {final_k}** (청크 길이 중앙값으로 3,600자 예산을 채우는 개수)")
 
     # 3) 임계값: 정답 없는 쿼리 전부(조정용엔 1개뿐) + 조정용 정답 청크 코사인
     none = [q for q in ctx.all_queries if q["form"] == "unanswerable" and not q["excluded"]]
