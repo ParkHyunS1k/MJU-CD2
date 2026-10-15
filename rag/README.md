@@ -10,7 +10,7 @@
 | `parse.py` `clean.py` `sections.py` `paragraphs.py` `chunk.py` `records.py` | 단계별 모듈 |
 | `corpus-candidates.md` | 넣지 않은 후보 문서와 공개 API 조사 (코퍼스 확장 시 참고) |
 
-임베딩과 DB 적재는 하위 프로젝트 3에서 추가합니다.
+임베딩과 DB 적재는 `load.py`가 합니다(아래 DB 적재).
 
 ## 문서 준비
 
@@ -74,6 +74,16 @@ python -m rag.ingest --chunker paragraph --overlap 0
 - `no_toc`: 책갈피가 없어 제목 경로 없이 청킹된 문서. 인용에 장·절이 표시되지 않습니다.
 - `skipped_no_text`: 텍스트 레이어가 없는 스캔본. OCR이 필요합니다.
 - `failed`: 열 수 없는 PDF.
+
+## DB 적재 (`rag/load.py`)
+
+```bash
+python -m rag.load
+```
+
+- `rag/eval/selected.json`의 구성으로 청크를 만들고 Supabase `rag_documents`, `rag_chunks`와 맞춥니다. 새 `content_hash`만 Gemini 768차원으로 임베딩하고, 사라진 청크·문서는 지웁니다.
+- 바뀐 것이 없으면 임베딩 API를 호출하지 않습니다. Gemini 임베딩 무료 한도는 하루 1,000건입니다.
+- 테이블과 검색 RPC는 `supabase/migrations/20261015000000_rag_tables.sql`입니다.
 
 ## 검색 평가 (`rag/eval/`)
 
