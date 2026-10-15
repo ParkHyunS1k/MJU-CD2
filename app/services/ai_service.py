@@ -119,7 +119,8 @@ def generate_report(
 ) -> dict:
     """ML 예측 결과와 유저 프로필을 받아 구조화된 생활습관 리포트를 생성한다.
     trend_analysis가 있으면 시계열 추세도 반영한다.
-    inbody_metrics가 있으면 실제 수치 기반으로 보수적인 보충제 후보를 제안한다.
+    evidence는 [근거] 블록으로 넣어 항목마다 source_ids로 인용하게 하고, 보충제는 근거에 있는 원료만 제안한다.
+    previous_report는 직전 리포트 요약으로, 조언의 연속성을 위해 참고만 한다.
     """
     client = get_gemini()
 

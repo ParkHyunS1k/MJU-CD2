@@ -3,7 +3,10 @@ import logging
 from app.core.supabase import get_supabase_admin
 from app.schemas.inbody import HealthReport
 from app.services.ai_service import generate_report
+from app.services.citation_service import validate_citations
 from app.services.prediction_service import predict_all
+from app.services.rag_taxonomy import build_queries
+from app.services.retrieval_service import RetrievalError, retrieve
 from app.services.storage_service import delete_inbody_file
 from app.services.trend_service import compute_trends, is_eligible
 
@@ -72,12 +75,23 @@ def _analyze_inbody_record(
 
     trend_analysis = _build_trend_analysis(records, disease_risks)
 
+    queries = build_queries(disease_risks, target, user.get("gender"))
+    try:
+        evidence = retrieve(queries)
+    except RetrievalError as e:
+        log.exception("failed to retrieve RAG evidence")
+        raise AnalysisServiceError(503, "참고 자료를 불러오지 못했습니다. 잠시 후 다시 분석해주세요.") from e
+    if not evidence:
+        log.warning("RAG 근거 0개: %s", [q.text for q in queries])
+
     try:
         gemini_result = generate_report(
             disease_risks=disease_risks,
             user_profile=user,
             trend_analysis=trend_analysis,
             inbody_metrics=target,
+            evidence=evidence,
+            previous_report=_previous_report_summary(records, target),
         )
     except ValueError as e:
         raise AnalysisServiceError(502, str(e)) from e
@@ -85,11 +99,13 @@ def _analyze_inbody_record(
         log.exception("failed to generate AI report")
         raise AnalysisServiceError(502, "AI 리포트 생성 중 오류가 발생했습니다.") from e
 
+    content, sources = validate_citations(gemini_result, evidence)
     try:
         report = HealthReport(
             disease_risks=disease_risks,
             trend_analysis=trend_analysis,
-            **gemini_result,
+            sources=sources,
+            **content,
         )
     except Exception as e:
         log.exception("failed to build health report")
@@ -119,6 +135,20 @@ def _list_inbody_records(sb, user_id: str) -> list[dict]:
         .execute()
     )
     return res.data
+
+
+def _previous_report_summary(records: list[dict], target: dict) -> dict | None:
+    """대상보다 먼저 측정했고 리포트가 있는 가장 최근 기록의 요약. 옛 스키마도 읽을 수 있게 get으로 꺼낸다."""
+    measured = target.get("measured_at") or ""
+    earlier = [r for r in records if r.get("ai_report") and (r.get("measured_at") or "") < measured]
+    if not earlier:
+        return None
+    report = max(earlier, key=lambda r: r["measured_at"])["ai_report"]
+    return {
+        "key_focus": (report.get("summary") or {}).get("key_focus", []),
+        "lifestyle_titles": [p.get("title") for p in report.get("lifestyle_plan") or []],
+        "supplements": [s.get("name") for s in report.get("supplement_candidates") or []],
+    }
 
 
 def _build_trend_analysis(records: list[dict], disease_risks: list[dict]) -> dict | None:
