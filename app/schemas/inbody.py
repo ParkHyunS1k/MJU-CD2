@@ -59,6 +59,7 @@ class BodyWatchPoint(BaseModel):
     current_value: str
     interpretation: str
     priority: Literal["low", "medium", "high"]
+    source_ids: list[str] = Field(default_factory=list)
 
 
 class BodyCompositionReport(BaseModel):
@@ -72,6 +73,7 @@ class RiskReportItem(BaseModel):
     probability: float
     main_factors: list[str]
     message: str
+    source_ids: list[str] = Field(default_factory=list)
 
 
 class LifestylePlanItem(BaseModel):
@@ -79,6 +81,7 @@ class LifestylePlanItem(BaseModel):
     title: str
     reason: str
     actions: list[str]
+    source_ids: list[str] = Field(default_factory=list)
 
 
 class SupplementCandidate(BaseModel):
@@ -89,6 +92,19 @@ class SupplementCandidate(BaseModel):
     why_consider: str
     cautions: list[str]
     not_recommended_if: list[str]
+    source_ids: list[str] = Field(default_factory=list)
+
+
+class SourceRef(BaseModel):
+    """리포트가 인용한 근거. 서버가 채우며 LLM 응답 스키마(AIReportContent)에는 없다."""
+
+    sid: str
+    title: str
+    publisher: str | None = None
+    year: int | None = None
+    page: str | None = None
+    heading_path: str | None = None
+    url: str | None = None
 
 
 class ReportCautions(BaseModel):
@@ -108,6 +124,7 @@ class AIReportContent(BaseModel):
 class HealthReport(AIReportContent):
     disease_risks: list[DiseaseRisk]
     trend_analysis: TrendAnalysis | None = None
+    sources: list[SourceRef] = Field(default_factory=list)
 
 
 class InBodyMetricsBase(BaseModel):
