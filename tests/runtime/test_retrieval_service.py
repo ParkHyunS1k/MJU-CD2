@@ -31,7 +31,7 @@ def test_select_round_robin_by_rank_dedupes_and_numbers():
     ev = rs.select_evidence([Q1, Q2], results)
     assert [e.chunk_id for e in ev] == [1, 2, 4, 3]
     assert [e.sid for e in ev] == ["S1", "S2", "S3", "S4"]
-    assert ev[1].condition == "hypertension"  # 처음 나온 쿼리의 태그
+    assert ev[1].condition == "diabetes"  # 순위 순서로 처음 고른 쿼리(Q2의 1위)의 태그
     assert ev[0].year == 2026 and ev[0].content == "본문 1"
 
 
