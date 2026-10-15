@@ -78,7 +78,8 @@ def retrieve(state: dict, chunks: list[dict], texts: list[str]) -> tuple[list[li
 
 class Ctx:
     def __init__(self, queries_path: Path = QUERIES, labels_path: Path = LABELS):
-        self.all_queries, self.queries, self.labels = load_eval(queries_path, labels_path)
+        doc_ids = {doc["id"] for doc in json.loads(SOURCES.read_text(encoding="utf-8"))}
+        self.all_queries, self.queries, self.labels = load_eval(queries_path, labels_path, doc_ids)
         self.groups = groups(self.queries, self.labels)
 
 

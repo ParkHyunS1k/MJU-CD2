@@ -30,6 +30,17 @@ def test_load_eval_drops_unanswerable_and_excluded(tmp_path):
     assert set(by_q) == {"q1", "q2"}
 
 
+def test_load_eval_drops_labels_of_documents_not_in_corpus(tmp_path):
+    q = lambda qid: {"query_id": qid, "text": qid, "form": "keyword", "split": "tune", "excluded": False}
+    queries = _jsonl(tmp_path / "q.jsonl", [q("q1"), q("q2")])
+    labels = _jsonl(tmp_path / "l.jsonl", [{"query_id": "q1", "doc_id": "a", "evidence": EVIDENCE, "source": "human"},
+                                          {"query_id": "q1", "doc_id": "gone", "evidence": EVIDENCE, "source": "llm"},
+                                          {"query_id": "q2", "doc_id": "gone", "evidence": EVIDENCE, "source": "llm"}])
+    _, scored, by_q = load_eval(queries, labels, doc_ids={"a"})
+    assert [x["query_id"] for x in scored] == ["q1"]
+    assert [l["doc_id"] for l in by_q["q1"]] == ["a"] and "q2" not in by_q
+
+
 def test_find_evidence_same_doc_only():
     assert find_evidence(CHUNKS, LABELS["q1"]) == {0: {0}}
 

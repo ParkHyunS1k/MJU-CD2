@@ -1,7 +1,8 @@
 import re
 from dataclasses import dataclass
 
-from rag.paragraphs import merge_paragraphs
+from rag.paragraphs import is_table_or_caption, merge_paragraphs
+from rag.parse import Block
 from rag.sections import Section
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
@@ -65,14 +66,18 @@ def chunk_section(section: Section, max_chars: int = 1200, overlap: int = 150) -
     return chunks
 
 
+def _body_paragraphs(section: Section) -> list[Block]:
+    return [p for p in merge_paragraphs(section.blocks) if not is_table_or_caption(p.text)]
+
+
 def chunk_paragraphs(section: Section, max_chars: int = 1200) -> list[Chunk]:
-    """문단을 max_chars까지 쌓는다. 문단 중간은 자르지 않고, 넘치는 문단만 문장 단위로 나눈다."""
-    return chunk_section(Section(section.heading_path, merge_paragraphs(section.blocks)), max_chars, overlap=0)
+    """문단을 max_chars까지 쌓는다. 문단 중간은 자르지 않고, 넘치는 문단만 문장 단위로 나눈다. 표·캡션은 버린다."""
+    return chunk_section(Section(section.heading_path, _body_paragraphs(section)), max_chars, overlap=0)
 
 
 def chunk_single(section: Section, max_chars: int = 1200, min_chars: int = 80) -> list[Chunk]:
     """문단 하나가 청크 하나. min_chars 미만 조각(소제목 등)은 다음 문단에 붙인다."""
-    pieces = [c for p in merge_paragraphs(section.blocks)
+    pieces = [c for p in _body_paragraphs(section)
               for c in chunk_section(Section(section.heading_path, [p]), max_chars, overlap=0)]
     chunks, pending = [], []
     for piece in pieces:

@@ -10,6 +10,10 @@ _SENTENCE_MARK = (".", "!", "?", "。")
 _CITATION_TAIL = re.compile(r"(\[[\d,\s\-–]+\]|\d+(?:[,\-–]\d+)*)$")
 _SOFT_HYPHEN = re.compile("\u00ad\\s*")
 _COLUMN_TOLERANCE = 15  # 같은 단으로 보는 x0 차이(pt)
+_CAPTION = re.compile(r"^(표|그림|Table|Figure|Fig\.)\s*\d+([.\-–]\d+)*\.?\s")
+# 문장 끝: 글자 뒤 마침표. 사이에 인용 번호(다363-365.)나 <표14>가 끼어도 되고, 뒤에 인용 번호가 붙어도 된다
+_SENTENCE_END = re.compile(r"([가-힣]|[a-z)\]%>])\s*(\d+([,\-–]\d+)*)?[.!?](?=\s|$|\d)")
+_MAX_DIGIT_RATIO = 0.2
 
 
 def ends_sentence(text: str) -> bool:
@@ -59,3 +63,15 @@ def merge_paragraphs(blocks: list[Block]) -> list[Block]:
             out.append(replace(block, text=text))
         prev = block
     return [replace(b, text=b.text.replace("\u00ad", "")) for b in out]
+
+
+def is_table_or_caption(text: str) -> bool:
+    """표·그림 캡션, 숫자 위주 표, 문장이 하나도 없는 조각(표 칸, 목록 제목, 소속·주소). 문단 청커가 버린다.
+    권고문처럼 문장 뒤에 근거 등급(Ⅰ A)이 붙은 문단은 문장이 있으므로 남는다."""
+    t = re.sub(r"\s+", " ", text).strip()
+    has_sentence = bool(_SENTENCE_END.search(t))
+    if _CAPTION.match(t) and (not has_sentence or len(t) < 200):  # 200자 이상이면 캡션 뒤에 본문이 붙은 문단
+        return True
+    if sum(c.isdigit() for c in t) >= _MAX_DIGIT_RATIO * len(t):
+        return True
+    return not has_sentence

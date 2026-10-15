@@ -17,12 +17,15 @@ def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def load_eval(queries_path: Path, labels_path: Path) -> tuple[list[dict], list[dict], dict[str, list[dict]]]:
-    """(전체 쿼리, 채점 쿼리, 쿼리별 라벨). 제외·정답 없음 쿼리는 검색 지표에서 뺀다."""
+def load_eval(queries_path: Path, labels_path: Path,
+              doc_ids: set[str] | None = None) -> tuple[list[dict], list[dict], dict[str, list[dict]]]:
+    """(전체 쿼리, 채점 쿼리, 쿼리별 라벨). 제외·정답 없음 쿼리는 검색 지표에서 뺀다.
+    doc_ids를 주면 코퍼스에서 뺀 문서의 라벨을 버린다(근거가 그 문서에만 있던 쿼리는 채점에서 빠진다)."""
     queries = _read_jsonl(queries_path)
     labels: dict[str, list[dict]] = {}
     for label in _read_jsonl(labels_path):
-        labels.setdefault(label["query_id"], []).append(label)
+        if doc_ids is None or label["doc_id"] in doc_ids:
+            labels.setdefault(label["query_id"], []).append(label)
     scored = [q for q in queries
               if not q["excluded"] and q["form"] != "unanswerable" and q["query_id"] in labels]
     return queries, scored, labels

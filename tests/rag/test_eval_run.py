@@ -46,6 +46,9 @@ def ctx(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "RESULTS", tmp_path / "results")
     monkeypatch.setattr(run, "load", lambda name: FakeEmbedder())
     monkeypatch.setattr(run, "chunk_variant", lambda *args: CHUNKS)
+    sp = tmp_path / "sources.json"
+    sp.write_text(json.dumps([{"id": "a"}]), encoding="utf-8")
+    monkeypatch.setattr(run, "SOURCES", sp)
     return run.Ctx(qp, lp)
 
 
