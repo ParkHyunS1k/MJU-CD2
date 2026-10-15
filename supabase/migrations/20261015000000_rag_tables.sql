@@ -1,5 +1,5 @@
 -- RAG 근거 저장소. 설계: docs/superpowers/specs/2026-10-15-rag-runtime-design.md 4절
-create extension if not exists vector;
+create extension if not exists vector with schema extensions;
 
 create table public.rag_documents (
   id text primary key,
@@ -32,7 +32,7 @@ create function public.match_rag_chunks(query_embedding halfvec(768), match_coun
 returns table (chunk_id bigint, document_id text, title text, publisher text, published_year int, url text,
                heading_path text, page_start int, page_end int, content text, similarity float)
 language sql stable
-set search_path = public
+set search_path = public, extensions
 as $$
   select c.id, c.document_id, d.title, d.publisher, d.published_year, d.url,
          c.heading_path, c.page_start, c.page_end, c.content,

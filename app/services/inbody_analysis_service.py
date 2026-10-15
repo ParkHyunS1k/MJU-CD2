@@ -140,7 +140,7 @@ def _list_inbody_records(sb, user_id: str) -> list[dict]:
 def _previous_report_summary(records: list[dict], target: dict) -> dict | None:
     """대상보다 먼저 측정했고 리포트가 있는 가장 최근 기록의 요약. 옛 스키마도 읽을 수 있게 get으로 꺼낸다."""
     measured = target.get("measured_at") or ""
-    earlier = [r for r in records if r.get("ai_report") and (r.get("measured_at") or "") < measured]
+    earlier = [r for r in records if r.get("ai_report") and r.get("measured_at") and r["measured_at"] < measured]
     if not earlier:
         return None
     report = max(earlier, key=lambda r: r["measured_at"])["ai_report"]

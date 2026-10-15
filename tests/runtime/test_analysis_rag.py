@@ -72,3 +72,9 @@ def test_previous_summary_tolerates_old_schema_and_picks_latest_earlier():
     assert svc._previous_report_summary([older2], TARGET) == {"key_focus": [], "lifestyle_titles": [],
                                                               "supplements": []}
     assert svc._previous_report_summary([TARGET], TARGET) is None
+
+
+def test_previous_summary_ignores_records_without_measured_at():
+    undated = {"id": "rx", "measured_at": None, "ai_report": {"summary": {"key_focus": ["날짜 없음"]}}}
+    assert svc._previous_report_summary([TARGET, undated, OLDER], TARGET)["key_focus"] == ["체중"]
+    assert svc._previous_report_summary([TARGET, undated], TARGET) is None

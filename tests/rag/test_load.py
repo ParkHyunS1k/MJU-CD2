@@ -91,3 +91,20 @@ def test_sync_without_changes_calls_no_embedding():
     sb = FakeSB(chunks=[{"content_hash": "1", "document_id": "a"}], docs=[{"id": "a"}])
     stats = load.sync(sb, [_rec("1")], SOURCES, lambda *_: (_ for _ in ()).throw(AssertionError("no call")))
     assert stats == {"documents": 1, "added": 0, "deleted": 0, "kept": 1}
+
+
+import pytest
+
+
+@pytest.mark.parametrize("records,stats", [
+    ([], {"failed": [], "skipped_no_text": []}),
+    ([_rec("1")], {"failed": ["b"], "skipped_no_text": []}),
+    ([_rec("1")], {"failed": [], "skipped_no_text": ["b"]}),
+])
+def test_incomplete_ingest_aborts_before_touching_db(records, stats):
+    with pytest.raises(load.IncompleteIngest):
+        load.check_ingest(records, stats)
+
+
+def test_complete_ingest_passes():
+    load.check_ingest([_rec("1")], {"failed": [], "skipped_no_text": []})

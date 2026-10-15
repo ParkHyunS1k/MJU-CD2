@@ -18,6 +18,17 @@ _INSERT_BATCH = 20  # 임베딩 배치와 같게 해서, 한도에 걸려 멈춰
 _DELETE_BATCH = 100
 
 
+class IncompleteIngest(RuntimeError):
+    """PDF가 없거나 읽히지 않은 문서가 있다. 그대로 맞추면 운영 DB의 청크가 지워진다."""
+
+
+def check_ingest(records: list[dict], stats: dict) -> None:
+    missing = [*stats.get("failed", []), *stats.get("skipped_no_text", [])]
+    if not records or missing:
+        raise IncompleteIngest(f"수집이 완전하지 않아 적재를 멈춥니다(청크 {len(records)}개, 실패 {missing}). "
+                               "rag/raw/의 PDF를 확인하세요.")
+
+
 def plan_sync(records: list[dict], db_hashes: set[str]) -> tuple[list[dict], set[str]]:
     hashes = {r["content_hash"] for r in records}
     return [r for r in records if r["content_hash"] not in db_hashes], db_hashes - hashes
@@ -85,6 +96,7 @@ def main() -> int:
     records, stats = ingest(SOURCES, RAW, cfg["max_chars"], cfg["overlap"], cfg["parser"], cfg["spacing"],
                             chunker=cfg["chunker"])
     log.info("ingest: %s", json.dumps(stats, ensure_ascii=False))
+    check_ingest(records, stats)
     sources = json.loads(SOURCES.read_text(encoding="utf-8"))
     print(json.dumps(sync(get_supabase_admin(), records, sources, _embed_with_retry), ensure_ascii=False))
     return 0
