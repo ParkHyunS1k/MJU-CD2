@@ -33,7 +33,8 @@ def test_unknown_duplicate_and_messy_ids_are_cleaned():
 
 
 def test_supplement_without_valid_citation_is_dropped():
-    content, _ = validate_citations(_content(), [_ev("S1"), _ev("S2")])
+    s2 = Evidence(**{**_ev("S2").__dict__, "category": "supplement"})
+    content, _ = validate_citations(_content(), [_ev("S1"), s2])
     assert [s["name"] for s in content["supplement_candidates"]] == ["홍국"]
 
 
@@ -60,3 +61,16 @@ def test_old_report_without_new_fields_still_parses():
     old["body_composition_report"]["watch_points"][0].pop("source_ids")
     report = HealthReport(disease_risks=[], **old)
     assert report.sources == [] and report.risk_report[0].source_ids == []
+
+
+def test_supplement_citing_only_diet_or_lifestyle_evidence_is_dropped():
+    diet = _ev("S1")  # category="diet": 식사요법 문단이 생선·마그네슘 식품을 말해도 영양제 근거는 아니다
+    supplement = Evidence(**{**diet.__dict__, "sid": "S2", "chunk_id": 2, "category": "supplement"})
+    content = _content(supplement_candidates=[
+        {"name": "오메가3", "purpose": "p", "related_metrics": [], "evidence_level": "limited", "why_consider": "w",
+         "cautions": [], "not_recommended_if": [], "source_ids": ["S1"]},
+        {"name": "홍국", "purpose": "p", "related_metrics": [], "evidence_level": "limited", "why_consider": "w",
+         "cautions": [], "not_recommended_if": [], "source_ids": ["S1", "S2"]}])
+    out, sources = validate_citations(content, [diet, supplement])
+    assert [s["name"] for s in out["supplement_candidates"]] == ["홍국"]
+    assert out["supplement_candidates"][0]["source_ids"] == ["S2"]

@@ -14,7 +14,7 @@ EMBEDDING_DIMS = 768
 FINAL_K = 3
 MIN_SIMILARITY = 0.7028
 MAX_EVIDENCE = 15
-TIMEOUT_S = 3.0
+TIMEOUT_S = 10.0  # 실측: 쿼리 13개 임베딩 2.1초 + RPC 0.3초. 리포트 생성(약 36초)에 비하면 작은 여유
 _WORKERS = 8
 
 

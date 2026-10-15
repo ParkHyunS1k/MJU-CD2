@@ -21,14 +21,14 @@ create table public.rag_chunks (
   category text not null,
   content_hash text unique not null,
   embedding_model text not null,
-  embedding halfvec(768) not null
+  embedding extensions.halfvec(768) not null
 );
-create index rag_chunks_embedding_idx on public.rag_chunks using hnsw (embedding halfvec_cosine_ops);
+create index rag_chunks_embedding_idx on public.rag_chunks using hnsw (embedding extensions.halfvec_cosine_ops);
 
 alter table public.rag_documents enable row level security;
 alter table public.rag_chunks enable row level security;
 
-create function public.match_rag_chunks(query_embedding halfvec(768), match_count int, min_similarity float)
+create function public.match_rag_chunks(query_embedding extensions.halfvec(768), match_count int, min_similarity float)
 returns table (chunk_id bigint, document_id text, title text, publisher text, published_year int, url text,
                heading_path text, page_start int, page_end int, content text, similarity float)
 language sql stable
@@ -43,5 +43,5 @@ as $$
   limit match_count;
 $$;
 
-revoke execute on function public.match_rag_chunks(halfvec, int, float) from public, anon, authenticated;
-grant execute on function public.match_rag_chunks(halfvec, int, float) to service_role;
+revoke execute on function public.match_rag_chunks(extensions.halfvec, int, float) from public, anon, authenticated;
+grant execute on function public.match_rag_chunks(extensions.halfvec, int, float) to service_role;

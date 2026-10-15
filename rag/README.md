@@ -83,7 +83,7 @@ python -m rag.load
 
 - `rag/eval/selected.json`의 구성으로 청크를 만들고 Supabase `rag_documents`, `rag_chunks`와 맞춥니다. 새 `content_hash`만 Gemini 768차원으로 임베딩하고, 사라진 청크·문서는 지웁니다.
 - 바뀐 것이 없으면 임베딩 API를 호출하지 않습니다. Gemini 임베딩 무료 한도는 하루 1,000건입니다.
-- 테이블과 검색 RPC는 `supabase/migrations/20261015000000_rag_tables.sql`입니다.
+- 테이블과 검색 RPC는 `supabase/migrations/20261015131746_rag_tables.sql`입니다.
 
 ## 검색 평가 (`rag/eval/`)
 

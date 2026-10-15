@@ -45,7 +45,7 @@
 | `app/services/citation_service.py` | 신규 | `validate_citations` |
 | `app/services/ai_service.py` | 수정 | 근거 규칙, `build_report_prompt`, `generate_report` 인자 |
 | `app/services/inbody_analysis_service.py` | 수정 | 검색 연결, 503, 직전 리포트 요약 |
-| `supabase/migrations/20261015000000_rag_tables.sql` | 신규 | 테이블, 인덱스, RLS, RPC |
+| `supabase/migrations/20261015131746_rag_tables.sql` | 신규 | 테이블, 인덱스, RLS, RPC |
 | `rag/load.py` | 신규 | 적재(수집 → 비교 → 임베딩 → upsert/삭제) |
 | `tests/app/` | 신규 | 런타임 단위 테스트 |
 | `tests/rag/test_load.py` | 신규 | 적재 테스트 |
@@ -1086,7 +1086,7 @@ git commit -m "feat(rag): retrieve evidence in report analysis, 503 on retrieval
 ### Task 7: 마이그레이션 SQL과 적재 스크립트 (`rag.load`)
 
 **Files:**
-- Create: `supabase/migrations/20261015000000_rag_tables.sql`
+- Create: `supabase/migrations/20261015131746_rag_tables.sql`
 - Create: `rag/load.py`
 - Modify: `rag/README.md` (적재 절)
 - Test: `tests/rag/test_load.py`
@@ -1097,7 +1097,7 @@ git commit -m "feat(rag): retrieve evidence in report analysis, 503 on retrieval
 
 - [ ] **Step 1: Write the migration file**
 
-`supabase/migrations/20261015000000_rag_tables.sql`:
+`supabase/migrations/20261015131746_rag_tables.sql`:
 
 ```sql
 -- RAG 근거 저장소. 설계: docs/superpowers/specs/2026-10-15-rag-runtime-design.md 4절
@@ -1371,13 +1371,13 @@ python -m rag.load
 
 - `rag/eval/selected.json`의 구성으로 청크를 만들고 Supabase `rag_documents`, `rag_chunks`와 맞춥니다. 새 `content_hash`만 Gemini 768차원으로 임베딩하고, 사라진 청크·문서는 지웁니다.
 - 바뀐 것이 없으면 임베딩 API를 호출하지 않습니다. Gemini 임베딩 무료 한도는 하루 1,000건입니다.
-- 테이블과 검색 RPC는 `supabase/migrations/20261015000000_rag_tables.sql`입니다.
+- 테이블과 검색 RPC는 `supabase/migrations/20261015131746_rag_tables.sql`입니다.
 ````
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20261015000000_rag_tables.sql rag/load.py rag/README.md tests/rag/test_load.py
+git add supabase/migrations/20261015131746_rag_tables.sql rag/load.py rag/README.md tests/rag/test_load.py
 git commit -m "feat(rag): pgvector migration and idempotent corpus loader"
 ```
 
@@ -1386,7 +1386,7 @@ git commit -m "feat(rag): pgvector migration and idempotent corpus loader"
 ### Task 8: 실제 적용과 확인 (사용자 확인 필요)
 
 **Files:**
-- Modify: `supabase/migrations/20261015000000_rag_tables.sql` (적용된 버전 번호로 파일 이름만 바꿀 수 있음)
+- Modify: `supabase/migrations/20261015131746_rag_tables.sql` (적용된 버전 번호로 파일 이름만 바꿀 수 있음)
 - Modify: `docs/superpowers/specs/2026-10-15-rag-runtime-design.md` (상태)
 
 **Interfaces:**

@@ -1,7 +1,7 @@
 # RAG 런타임 통합 설계 (하위 프로젝트 3a)
 
 - 작성일: 2026-10-15
-- 상태: 검토 대기
+- 상태: 구현 완료 (2026-10-15). 마이그레이션 `20261015131746_rag_tables` 적용, 문서 9개·청크 228개 적재
 - 상위 설계: `docs/superpowers/specs/2026-10-08-rag-report-design.md` (3·5·7·8·9·11절)
 - 검색 구성: `rag/eval/selected.json` (평가 결과 `rag/eval/results/REPORT.md`)
 
@@ -155,7 +155,7 @@ grant execute on function match_rag_chunks to service_role;
 
 ```python
 EMBEDDING_MODEL = "gemini-embedding-001"; EMBEDDING_DIMS = 768
-FINAL_K = 3; MIN_SIMILARITY = 0.7028; MAX_EVIDENCE = 15; TIMEOUT_S = 3.0
+FINAL_K = 3; MIN_SIMILARITY = 0.7028; MAX_EVIDENCE = 15; TIMEOUT_S = 10.0
 ```
 
 1. 쿼리 문장을 `embed(…, "query")` 한 번으로 임베딩한다.
@@ -211,7 +211,7 @@ HealthReport.sources: list[SourceRef] = []
 ### 6.3 인용 검증 (`validate_citations(content, evidence) -> (content, sources)`)
 
 1. 이번 근거 목록에 없는 `source_ids`는 지운다.
-2. 유효한 인용이 0개인 영양제 후보는 뺀다.
+2. 영양제 후보는 영양제(category `supplement`) 근거를 인용한 것만 남긴다. 식사요법 문단의 식품 언급(등푸른 생선, DASH 식단의 마그네슘 등)을 근거로 붙은 보충제는 뺀다. 지금 코퍼스에는 영양제 문서가 없어 영양제 후보는 항상 빈다.
 3. 다른 항목은 인용이 없어도 유지한다.
 4. 실제로 인용된 근거만 S번호 순서로 `sources`에 담는다.
 
@@ -223,7 +223,7 @@ HealthReport.sources: list[SourceRef] = []
 
 | 상황 | 동작 |
 |---|---|
-| 임베딩 API 오류, RPC 오류, 검색 3초 초과 | `AnalysisServiceError(503, "참고 자료를 불러오지 못했습니다. 잠시 후 다시 분석해주세요.")`. 리포트를 저장하지 않고 이미지도 지우지 않는다 |
+| 임베딩 API 오류(분당·하루 한도 포함), RPC 오류, 검색 10초 초과 | `AnalysisServiceError(503, "참고 자료를 불러오지 못했습니다. 잠시 후 다시 분석해주세요.")`. 리포트를 저장하지 않고 이미지도 지우지 않는다 |
 | 검색 정상, 근거 0개 | 생성한다. 쿼리와 condition을 경고 로그로 남긴다 |
 | 생성 LLM 장애 | 기존과 같다(502, 대체 모델 재시도) |
 
@@ -248,7 +248,9 @@ HealthReport.sources: list[SourceRef] = []
 - 첫 적재(임베딩 API 약 228건, Gemini 하루 한도 1,000건 안)
 - Railway 배포
 
-**Gemini 한도:** 임베딩 하루 1,000건은 모델 단위로 묶여 차원과 상관없이 공유된다. 평가 실험과 앱이 같은 키를 쓰면 실험이 한도를 다 쓴 날 앱 검색이 멈춘다. 평가용 키를 따로 두거나 앱 키를 유료 등급으로 바꾸는 것을 권장한다.
+**검색 시간 (2026-10-15 실측):** 쿼리 13개 임베딩 2.1초, RPC 1회 0.3초(병렬), 합계 약 2.6초. 처음 정한 3초는 여유가 없어 10초로 늘렸다. 리포트 생성(Gemini, 약 36초)에 비하면 작다.
+
+**Gemini 한도:** 임베딩 무료 등급은 분당 100건, 하루 1,000건이고 텍스트 하나가 1건이다. 리포트 1건에 쿼리 2~16개를 쓰므로 분당 약 6~50건, 하루 약 60~500건이 상한이다. 한도를 넘으면 검색이 실패해 503이 난다. 임베딩 하루 1,000건은 모델 단위로 묶여 차원과 상관없이 공유된다. 평가 실험과 앱이 같은 키를 쓰면 실험이 한도를 다 쓴 날 앱 검색이 멈춘다. 평가용 키를 따로 두거나 앱 키를 유료 등급으로 바꾸는 것을 권장한다.
 
 ## 10. 이후 단계
 
