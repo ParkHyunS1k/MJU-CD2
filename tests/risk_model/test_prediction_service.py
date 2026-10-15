@@ -32,7 +32,8 @@ def test_output_shape(models_dir):
     res = ps.predict_all(INBODY, PROFILE)
     assert [r["disease"] for r in res] == ["고혈압", "고콜레스테롤", "당뇨", "고중성지방"]
     for r in res:
-        assert set(r) == {"disease", "probability", "risk_level", "top_factors"}
+        assert set(r) == {"disease", "disease_key", "probability", "risk_level", "top_factors"}
+        assert r["disease_key"] in {"hypertension", "cholesterol", "diabetes", "triglyceride"}
         assert 0 < r["probability"] < 1 and r["risk_level"] in {"low", "medium", "high"}
         assert 1 <= len(r["top_factors"]) <= 3
         for f in r["top_factors"]:

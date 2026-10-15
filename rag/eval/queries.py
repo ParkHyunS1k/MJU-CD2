@@ -8,38 +8,10 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-CONDITION_NAMES = {
-    "hypertension": "고혈압",
-    "diabetes": "당뇨병",
-    "dyslipidemia": "이상지질혈증",
-    "obesity": "비만",
-    "metabolic_syndrome": "대사증후군",
-    "fatty_liver": "지방간",
-    "sarcopenia": "근감소증",
-}
+from app.services.rag_taxonomy import CONDITION_NAMES, SCENARIOS, keyword_query  # 평가와 런타임이 같은 문구를 쓴다
+
 CATEGORY_NAMES = {"criteria": "진단 기준", "diet": "식사", "lifestyle": "생활습관", "exercise": "운동"}
 
-SCENARIOS: list[tuple[str, str]] = [
-    ("hypertension", "criteria"), ("hypertension", "diet"), ("hypertension", "lifestyle"), ("hypertension", "exercise"),
-    ("diabetes", "diet"), ("diabetes", "exercise"), ("diabetes", "lifestyle"),
-    ("dyslipidemia", "criteria"), ("dyslipidemia", "diet"), ("dyslipidemia", "lifestyle"), ("dyslipidemia", "exercise"),
-    ("obesity", "criteria"), ("obesity", "lifestyle"), ("obesity", "exercise"),
-    ("metabolic_syndrome", "criteria"), ("metabolic_syndrome", "lifestyle"),
-    ("fatty_liver", "criteria"), ("fatty_liver", "diet"), ("fatty_liver", "exercise"), ("fatty_liver", "lifestyle"),
-    ("sarcopenia", "criteria"), ("sarcopenia", "exercise"),
-    ("general", "diet"), ("general", "exercise"),
-]
-
-_KEYWORD_TEMPLATES = {
-    "criteria": "{name} 진단 기준 분류",
-    "diet": "{name} 예방 식이요법 식사 관리",
-    "lifestyle": "{name} 생활습관 교정 체중 감량 금연 절주",
-    "exercise": "{name} 운동요법 유산소 근력운동 권고",
-}
-_GENERAL_KEYWORDS = {
-    "diet": "한국인 영양소 섭취기준 권장섭취량 상한섭취량",
-    "exercise": "성인 신체활동 권장량 유산소 근력운동",
-}
 _INBODY_QUERIES = [
     "체지방률 32% 40대 여성 비만 기준",
     "골격근량 감소 노인 근력운동 방법",
@@ -50,12 +22,6 @@ _UNANSWERABLE_QUERIES = [
     "갑상선 기능저하증 운동 주의사항",
     "임신 중 철분제 복용 시기",
 ]
-
-
-def keyword_query(condition: str, category: str) -> str:
-    if condition == "general":
-        return _GENERAL_KEYWORDS[category]
-    return _KEYWORD_TEMPLATES[category].format(name=CONDITION_NAMES[condition])
 
 
 def _split(index: int) -> str:

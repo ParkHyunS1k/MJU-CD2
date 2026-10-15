@@ -120,6 +120,6 @@ def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
             for f, c in _contributions(bundle, x).items() if f in shown
         ]
         factors.sort(key=lambda d: abs(d["shap_value"]), reverse=True)
-        results.append({"disease": bundle["target"], "probability": prob,
+        results.append({"disease": bundle["target"], "disease_key": bundle["disease_key"], "probability": prob,
                         "risk_level": _risk_level(prob, bundle), "top_factors": factors[:TOP_K]})
     return results
