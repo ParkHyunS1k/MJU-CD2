@@ -60,17 +60,6 @@
     ]
   },
   {
-    "id": "kosso-obesity-factsheet-2024",
-    "file": "kosso_obesity_factsheet_2024.pdf",
-    "title": "2024 비만병 팩트시트",
-    "publisher": "대한비만학회",
-    "year": 2024,
-    "url": "https://general.kosso.or.kr/html/user/core/view/reaction/main/kosso/inc/data/2024_Obesity_Fact_sheet_web_kor1223.pdf",
-    "license_note": "학회 일반인 사이트 무료 공개. 이용조건 미기재",
-    "conditions": ["obesity", "metabolic_syndrome"],
-    "category": "criteria"
-  },
-  {
     "id": "kscms-metabolic-syndrome-2021",
     "file": "kscms_metabolic_syndrome_2021_summary.pdf",
     "title": "대사증후군 진료지침 2021 요약본",
@@ -88,11 +77,10 @@
     "publisher": "대한간학회",
     "year": 2021,
     "url": "https://www.kasl.org/bbs/?number=4630&mode=view&code=guide",
-    "license_note": "학회 홈페이지 무료 공개. All rights reserved. 2025 MASLD판이 생활습관 교정은 이 판을 참조하도록 명시",
+    "license_note": "학회 홈페이지 무료 공개. All rights reserved. 2025 MASLD판이 생활습관 교정은 이 판을 참조하도록 명시. 정의 장은 MASLD 2025와 용어가 달라 제외",
     "conditions": ["fatty_liver"],
     "category": "lifestyle",
     "sections": [
-      {"title": "정의", "pages": [12, 13], "category": "criteria"},
       {"title": "역학 > 위험인자와 동반질환", "pages": [17, 20], "category": "criteria"},
       {"title": "치료 > 생활습관 교정 > 체중감량", "pages": [36, 36], "category": "lifestyle"},
       {"title": "치료 > 생활습관 교정 > 식이요법", "pages": [37, 37], "category": "diet"},
@@ -106,52 +94,13 @@
     "publisher": "대한간학회",
     "year": 2025,
     "url": "https://www.kasl.org/bbs/?number=6193&mode=view&code=guide",
-    "license_note": "학회 홈페이지 무료 공개. 허락 없는 수정·변형·전재 금지(본문 명시)",
+    "license_note": "학회 홈페이지 무료 공개. 허락 없는 수정·변형·전재 금지(본문 명시). p.22 진단 기준 비교표 제외",
     "conditions": ["fatty_liver"],
     "category": "criteria",
     "sections": [
-      {"title": "정의 및 진단 기준", "pages": [18, 22], "category": "criteria"},
+      {"title": "정의 및 진단 기준", "pages": [18, 21], "category": "criteria"},
       {"title": "심혈관 질환 위험", "pages": [26, 30], "category": "criteria"}
     ]
-  },
-  {
-    "id": "kwgs-sarcopenia-diagnosis-2023",
-    "file": "kwgs_sarcopenia_diagnosis_2023.pdf",
-    "title": "Korean Working Group on Sarcopenia Guideline: Expert Consensus on Sarcopenia Screening and Diagnosis",
-    "publisher": "대한근감소증학회·대한골대사학회·대한노인병학회 (KWGS)",
-    "year": 2023,
-    "url": "https://www.e-agmr.org/upload/pdf/agmr-23-0009.pdf",
-    "license_note": "Annals of Geriatric Medicine and Research 오픈액세스. 라이선스 원문 확인 필요",
-    "conditions": ["sarcopenia"],
-    "category": "criteria",
-    "sections": [
-      {"title": "Assessment flow, screening and diagnostic criteria", "pages": [4, 9], "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kwgs-sarcopenia-exercise-2025",
-    "file": "kwgs_sarcopenia_exercise_2025.pdf",
-    "title": "Evidence-Based Exercise Guidelines for Sarcopenia in Older Adults",
-    "publisher": "Korean Working Group on Sarcopenia (KWGS)",
-    "year": 2025,
-    "url": "https://www.e-agmr.org/journal/view.php?doi=10.4235/agmr.25.0052",
-    "license_note": "CC BY-NC 4.0",
-    "conditions": ["sarcopenia"],
-    "category": "exercise",
-    "sections": [
-      {"title": "Results and FITT-based exercise recommendations", "pages": [4, 13], "category": "exercise"}
-    ]
-  },
-  {
-    "id": "kdri-2025-summary-table",
-    "file": "kdri_2025_summary_table.pdf",
-    "title": "2025 한국인 영양소 섭취기준 요약표",
-    "publisher": "보건복지부·한국영양학회",
-    "year": 2025,
-    "url": "https://www.kns.or.kr/FileRoom/FileRoom.asp?BoardID=Kdr",
-    "license_note": "이용조건 미기재(영문요약본은 공공누리 표기, 유형 미확인)",
-    "conditions": ["general"],
-    "category": "diet"
   },
   {
     "id": "mohw-physical-activity-2023",
@@ -160,9 +109,10 @@
     "publisher": "보건복지부·한국건강증진개발원",
     "year": 2023,
     "url": "https://www.mohw.go.kr/board.es?mid=a10411010100&bid=0019&act=view&list_no=1479208",
-    "license_note": "공공누리 표기, 유형 미확인. 장 제목이 이미지라 쪽 범위 미지정(전체 포함)",
+    "license_note": "공공누리 표기, 유형 미확인. 목차(p.2–3)와 부록(강도표·PAR-Q, p.66 이후) 제외",
     "conditions": ["general"],
-    "category": "exercise"
+    "category": "exercise",
+    "sections": [{"title": "신체활동 지침", "pages": [6, 64]}]
   },
   {
     "id": "jomes-ksso-behavioral-consensus-2026",
@@ -177,30 +127,6 @@
     "sections": [{"title": "Behavioral strategies", "pages": [1, 10], "category": "lifestyle"}]
   },
   {
-    "id": "jomes-ksso-obesity-guideline-2024",
-    "file": "jomes_ksso_obesity_guideline_2024.pdf",
-    "title": "2024 Clinical Practice Guidelines for the Diagnosis and Pharmacologic Treatment of Overweight and Obesity by the Korean Society for the Study of Obesity",
-    "publisher": "대한비만학회 (J Obes Metab Syndr)",
-    "year": 2025,
-    "url": "https://doi.org/10.7570/jomes25042",
-    "license_note": "CC BY-NC 4.0",
-    "conditions": ["obesity"],
-    "category": "criteria",
-    "sections": [{"title": "Diagnosis and treatment of overweight and obesity", "pages": [1, 15], "category": "criteria"}]
-  },
-  {
-    "id": "jomes-obesity-factsheet-2024",
-    "file": "jomes_obesity_factsheet_2024.pdf",
-    "title": "2024 Obesity Fact Sheet in Korea: Prevalence of Obesity, Abdominal Obesity, Obesity Defined by Body Fat Percentage, and Underweight in Adults",
-    "publisher": "대한비만학회 (J Obes Metab Syndr)",
-    "year": 2025,
-    "url": "https://doi.org/10.7570/jomes25039",
-    "license_note": "CC BY-NC 4.0",
-    "conditions": ["obesity"],
-    "category": "criteria",
-    "sections": [{"title": "Obesity fact sheet 2024", "pages": [1, 7], "category": "criteria"}]
-  },
-  {
     "id": "jomes-obesity-factsheet-2025",
     "file": "jomes_obesity_factsheet_2025.pdf",
     "title": "2025 Obesity Fact Sheet for Korea: Prevalence of Obesity, Abdominal Obesity from 2014 to 2023 and Prevalence of Chronic Disease by Obesity Status",
@@ -211,17 +137,5 @@
     "conditions": ["obesity", "metabolic_syndrome"],
     "category": "criteria",
     "sections": [{"title": "Obesity fact sheet 2025", "pages": [1, 9], "category": "criteria"}]
-  },
-  {
-    "id": "jomes-severe-obesity-exercise-2024",
-    "file": "jomes_severe_obesity_exercise_2024.pdf",
-    "title": "Exercise Guidelines for Enhancing Mobility and Stability in Individuals with Severe Obesity",
-    "publisher": "대한비만학회 (J Obes Metab Syndr)",
-    "year": 2025,
-    "url": "https://doi.org/10.7570/jomes24047",
-    "license_note": "CC BY-NC 4.0",
-    "conditions": ["obesity"],
-    "category": "exercise",
-    "sections": [{"title": "Exercise guidelines for severe obesity", "pages": [1, 9], "category": "exercise"}]
   }
 ]

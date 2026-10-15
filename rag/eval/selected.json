@@ -10,5 +10,5 @@
   "reranker": null,
   "query_form": "keyword",
   "final_k": 3,
-  "threshold": 0.7023
+  "threshold": 0.7028
 }

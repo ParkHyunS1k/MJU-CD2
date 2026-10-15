@@ -67,7 +67,8 @@ python -m rag.ingest --chunker paragraph --overlap 0
 선정된 구성(`rag/eval/selected.json`)은 PyMuPDF, 문단 묶기 1,200자, 겹침 0입니다. 인자 기본값(`--chunker chars --overlap 150`)은 평가 초기의 기준 구성이라 다릅니다.
 
 - `--parser {pymupdf,pdfplumber}`, `--spacing {off,on,auto}`(kiwi 띄어쓰기 복원, auto는 공백이 거의 없는 문서만)
-- `--chunker {chars,paragraph,paragraph-single}`: 글자 수 / 문단 묶기 / 문단 하나씩
+- `--chunker {chars,paragraph,paragraph-single}`: 글자 수 / 문단 묶기 / 문단 하나씩. 문단 청커는 표·그림 캡션, 숫자 위주의 표, 문장 없는 조각을 버립니다(`rag.paragraphs.is_table_or_caption`).
+- 문단 형식이 아닌 문서(표·그래프 위주)는 `sources.json`에 넣지 않습니다. 뺀 문서와 이유는 `corpus-candidates.md`에 있습니다.
 
 로그의 `stats`를 확인하세요.
 - `no_toc`: 책갈피가 없어 제목 경로 없이 청킹된 문서. 인용에 장·절이 표시되지 않습니다.
