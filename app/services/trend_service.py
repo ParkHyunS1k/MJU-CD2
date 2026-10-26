@@ -12,7 +12,7 @@ import numpy as np
 from app.core.supabase import get_supabase_admin
 
 # TODO: routers/inbody.py 에서 쓰는 실제 테이블 이름으로 바꾸기
-TABLE = "inbody_records"
+TABLE = "inbody_logs"  # routers/inbody.py 와 같은 테이블
 
 DATE_FIELD = "measured_at"          # schemas/inbody.py 의 측정일 필드
 FALLBACK_DATE_FIELD = "created_at"  # 측정일이 비어 있으면 등록 시각으로 대체
