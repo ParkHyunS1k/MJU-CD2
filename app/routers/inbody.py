@@ -18,6 +18,7 @@ from app.schemas.inbody import (
 )
 from app.services.ai_service import extract_inbody_from_image
 from app.services.storage_service import EXT_BY_MIME, upload_inbody_file
+from app.services.trend_service import analyze_trend
 
 router = APIRouter(prefix="/inbody", tags=["inbody"])
 
@@ -52,6 +53,14 @@ def list_inbody(
         .execute()
     )
     return res.data
+
+
+@router.get("/trend")
+def get_inbody_trend(
+    current: CurrentUser = Depends(get_current_user),
+):
+    """로그인한 사용자의 전체 측정 기록으로 변화 추세를 계산한다."""
+    return analyze_trend(current.id)
 
 
 @router.get("/{inbody_id}", response_model=InBodyResponse)
