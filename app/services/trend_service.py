@@ -11,51 +11,55 @@ import numpy as np
 
 from app.core.supabase import get_supabase_admin
 
-# TODO: 실제 측정 기록이 저장된 테이블 이름으로 바꾸기
+# TODO: routers/inbody.py 에서 쓰는 실제 테이블 이름으로 바꾸기
 TABLE = "inbody_records"
 
-# TODO: 실제 측정일 컬럼 이름으로 바꾸기
-DATE_FIELD = "measured_at"
+DATE_FIELD = "measured_at"          # schemas/inbody.py 의 측정일 필드
+FALLBACK_DATE_FIELD = "created_at"  # 측정일이 비어 있으면 등록 시각으로 대체
 
-# 지표별 '좋아지는 방향' (+1: 증가가 좋음, -1: 감소가 좋음)
-# TODO: 키 이름을 schemas/inbody.py 의 실제 필드 이름으로 바꾸기
+# 지표별 '좋아지는 방향'
+#  -1: 감소가 좋음 / +1: 증가가 좋음 / 0: 좋고 나쁨을 판단하지 않음(증가·감소만 표시)
 DIRECTION = {
-    "body_fat_pct": -1,      # 체지방률
-    "waist": -1,             # 허리둘레
-    "skeletal_muscle": +1,   # 골격근량
-    "phase_angle": +1,       # 위상각
+    "body_fat_percentage": -1,   # 체지방률 (%)
+    "body_fat_mass": -1,         # 체지방량 (kg)
+    "skeletal_muscle_mass": +1,  # 골격근량 (kg)
+    "abs_fat": -1,               # 복부지방률
+    "fat_level": -1,             # 내장지방 레벨
+    "weight": 0,                 # 체중 (kg) — 근육 증가로도 늘 수 있어 판정하지 않음
 }
 
 # 이 값보다 작은 변화는 측정 오차로 보고 '유지'로 판정
 # TODO: 임시값 — InBody 측정 재현성 근거로 팀에서 확정
 THRESHOLD = {
-    "body_fat_pct": 1.0,
-    "waist": 1.0,
-    "skeletal_muscle": 0.5,
-    "phase_angle": 0.2,
+    "body_fat_percentage": 1.0,
+    "body_fat_mass": 0.5,
+    "skeletal_muscle_mass": 0.5,
+    "abs_fat": 0.02,
+    "fat_level": 1,
+    "weight": 1.0,
 }
 
 MIN_POINTS_FOR_SLOPE = 3  # 추세선 기울기는 3회 이상일 때만 계산
 
 
 def list_inbody_records(user_id: str) -> list[dict]:
-    """사용자의 측정 기록을 측정일 오름차순으로 가져온다."""
+    """사용자의 측정 기록을 모두 가져온다. (정렬은 analyze_records 에서 처리)"""
     sb = get_supabase_admin()
-    res = (
-        sb.table(TABLE)
-        .select("*")
-        .eq("user_id", user_id)
-        .order(DATE_FIELD)
-        .execute()
-    )
+    res = sb.table(TABLE).select("*").eq("user_id", user_id).execute()
     return res.data or []
 
 
 def _to_date(value) -> date:
-    """'YYYY-MM-DD' 또는 'YYYY-MM-DDTHH:MM:SS...' 문자열을 date로 변환한다."""
+    """'YYYY-MM-DD' 또는 'YYYY-MM-DDTHH:MM:SS...' 를 date로 변환한다."""
     if isinstance(value, date):
-        return value
+        return value if not hasattr(value, "date") else value.date()
     return date.fromisoformat(str(value)[:10])
+
+
+def _record_date(record: dict):
+    """측정일을 우선 사용하고, 없으면 등록 시각을 쓴다."""
+    value = record.get(DATE_FIELD) or record.get(FALLBACK_DATE_FIELD)
+    return _to_date(value) if value else None
 
 
 def _monthly_slope(dates: list[date], values: list[float]) -> float:
@@ -68,28 +72,31 @@ def _monthly_slope(dates: list[date], values: list[float]) -> float:
 
 
 def _judge(key: str, delta: float) -> str:
-    """변화량과 좋아지는 방향을 보고 개선/유지/악화를 판정한다."""
+    """변화량과 좋아지는 방향을 보고 판정한다."""
     if abs(delta) < THRESHOLD[key]:
         return "유지"
-    return "개선" if delta * DIRECTION[key] > 0 else "악화"
+    direction = DIRECTION[key]
+    if direction == 0:
+        return "증가" if delta > 0 else "감소"
+    return "개선" if delta * direction > 0 else "악화"
 
 
 def analyze_records(records: list[dict]) -> dict:
     """측정 기록 리스트로 추세를 계산한다. (DB 없이 테스트할 때도 사용)"""
-    records = [r for r in records if r.get(DATE_FIELD)]
-    records.sort(key=lambda r: _to_date(r[DATE_FIELD]))
+    dated = [(_record_date(r), r) for r in records]
+    dated = sorted([(d, r) for d, r in dated if d is not None], key=lambda x: x[0])
 
-    if len(records) < 2:
+    if len(dated) < 2:
         return {
             "status": "insufficient",
             "message": "변화를 보려면 측정 기록이 2회 이상 필요해요.",
-            "count": len(records),
+            "count": len(dated),
         }
 
-    dates = [_to_date(r[DATE_FIELD]) for r in records]
+    dates = [d for d, _ in dated]
     result = {
         "status": "ok",
-        "count": len(records),
+        "count": len(dated),
         "first_date": dates[0].isoformat(),
         "latest_date": dates[-1].isoformat(),
         "period_days": (dates[-1] - dates[0]).days,
@@ -97,7 +104,7 @@ def analyze_records(records: list[dict]) -> dict:
     }
 
     for key in DIRECTION:
-        pairs = [(d, r[key]) for d, r in zip(dates, records) if r.get(key) is not None]
+        pairs = [(d, r[key]) for d, r in dated if r.get(key) is not None]
         if len(pairs) < 2:
             continue
 
