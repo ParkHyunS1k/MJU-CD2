@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
+import SocialLoginButton from '../components/SocialLoginButton';
 import { useAuth } from '../contexts/AuthContext';
 import type { AuthStackParamList } from '../navigation/types';
 
@@ -114,13 +115,14 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.socialButton}>
-            <Text style={styles.socialButtonText}>Google로 계속하기</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.socialButton}>
-            <Text style={styles.socialButtonText}>Kakao로 계속하기</Text>
-          </TouchableOpacity>
+          <SocialLoginButton
+            provider="kakao"
+            label="카카오 로그인"
+          />
+          <SocialLoginButton
+            provider="google"
+            label="Google 로그인"
+          />
 
           <View style={styles.signupRow}>
             <Text style={styles.signupText}>계정이 없으신가요? </Text>
@@ -271,19 +273,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     fontSize: 13,
     color: '#AAAAAA',
-  },
-
-  socialButton: {
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  socialButtonText: {
-    fontSize: 14,
-    color: '#333',
   },
 
   signupRow: {

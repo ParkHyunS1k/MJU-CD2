@@ -6,6 +6,10 @@ export interface UserProfile {
   gender: Gender | null;
   birth_year: number | null;
   fitness_goal: string | null;
+  // 가족력: 부·모·형제자매 중 진단자 여부 (null = 미응답)
+  fh_hypertension: boolean | null;
+  fh_diabetes: boolean | null;
+  fh_dyslipidemia: boolean | null;
   created_at: string;
 }
 
@@ -14,6 +18,9 @@ export interface UserUpdate {
   gender?: Gender | null;
   birth_year?: number | null;
   fitness_goal?: string | null;
+  fh_hypertension?: boolean | null;
+  fh_diabetes?: boolean | null;
+  fh_dyslipidemia?: boolean | null;
 }
 
 export type RiskLevel = 'low' | 'medium' | 'high';

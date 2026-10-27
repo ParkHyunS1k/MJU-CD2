@@ -20,6 +20,9 @@ import RiskScreen from '../screens/RiskScreen';
 import ReportScreen from '../screens/ReportScreen';
 import ReportTabScreen from '../screens/ReportTabScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import HealthSurveyScreen from '../screens/HealthSurveyScreen';
+import { api } from '../lib/api';
+import type { UserProfile } from '../types/models';
 import type { AuthStackParamList, InBodyStackParamList } from './types';
 
 const TEAL = '#00C2A8';
@@ -125,6 +128,28 @@ function MainTabs() {
   );
 }
 
+// 설문은 성별·출생연도를 반드시 받으므로, 둘 중 하나라도 비어 있으면 설문 전으로 본다.
+// 가족력은 '모름'이 null로 저장되어 미응답과 구별할 수 없어 판단에 쓰지 않는다.
+function needsSurvey(me: UserProfile): boolean {
+  const isEmpty = (v: unknown) => v === null || v === undefined;
+  return isEmpty(me.gender) || isEmpty(me.birth_year);
+}
+
+function SignedInRoot() {
+  const [status, setStatus] = useState<'checking' | 'survey' | 'done'>('checking');
+
+  useEffect(() => {
+    api
+      .getMe()
+      .then((me) => setStatus(needsSurvey(me) ? 'survey' : 'done'))
+      .catch(() => setStatus('done')); // 프로필 조회 실패 시 앱 사용은 막지 않는다
+  }, []);
+
+  if (status === 'checking') return <SplashScreen />;
+  if (status === 'survey') return <HealthSurveyScreen onDone={() => setStatus('done')} />;
+  return <MainTabs />;
+}
+
 export default function RootNavigator() {
   const { session, loading } = useAuth();
   const [splashDone, setSplashDone] = useState(false);
@@ -140,7 +165,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      {session ? <MainTabs /> : <AuthStackNavigator />}
+      {session ? <SignedInRoot /> : <AuthStackNavigator />}
     </NavigationContainer>
   );
 }
