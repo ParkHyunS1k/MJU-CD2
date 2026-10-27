@@ -157,7 +157,9 @@
       {"match": "운동", "category": "exercise"},
       {"match": "정의", "category": "criteria"},
       {"match": "진단", "category": "criteria"}
-    ]
+    ],
+    "exclude_sections": ["생활습관 관리"],
+    "exclude_paragraphs": ["소금을 하루 6 g 이하로"]
   },
   {
     "id": "kdca-6855",
@@ -199,7 +201,8 @@
       {"match": "운동", "category": "exercise"},
       {"match": "정의", "category": "criteria"},
       {"match": "진단", "category": "criteria"}
-    ]
+    ],
+    "exclude_paragraphs": ["혈압조절 목표(수축기 혈압 140", "혈압 조절 목표는 심혈관질환이 동반되지 않은"]
   },
   {
     "id": "kdca-3388",
@@ -317,7 +320,8 @@
       {"match": "운동", "category": "exercise"},
       {"match": "정의", "category": "criteria"},
       {"match": "진단", "category": "criteria"}
-    ]
+    ],
+    "exclude_sections": ["정의"]
   },
   {
     "id": "kdca-5293",
@@ -359,7 +363,8 @@
       {"match": "운동", "category": "exercise"},
       {"match": "정의", "category": "criteria"},
       {"match": "진단", "category": "criteria"}
-    ]
+    ],
+    "exclude_paragraphs": ["BMI가 23 kg/m²를 넘으면 비만"]
   },
   {
     "id": "kdca-6694",

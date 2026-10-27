@@ -63,7 +63,7 @@ def ingest(
     make_chunks = CHUNKERS[chunker]
     for source, path in load_sources(sources_path, raw_dir):
         if source.kind == "kdca":
-            sections = load_kdca_sections(path)
+            sections = load_kdca_sections(path, source.exclude_sections, source.exclude_paragraphs)
             chunks = [chunk for section in sections for chunk in make_chunks(section, max_chars, overlap)]
             # 웹 문서라 쪽 번호가 없다
             records.extend({**r, "page_start": None, "page_end": None} for r in build_records(source, chunks))

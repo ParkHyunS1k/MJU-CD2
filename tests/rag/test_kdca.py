@@ -74,10 +74,42 @@ def test_ingest_reads_kdca_documents_without_pages(tmp_path):
         "id": "kdca-6765", "kind": "kdca", "cntnts_sn": 6765, "file": "kdca/6765.json", "title": "고혈압",
         "publisher": "질병관리청", "conditions": ["hypertension"], "category": "lifestyle",
         "section_rules": [{"match": "치료", "category": "lifestyle"}],
+        "exclude_sections": ["정의"], "exclude_paragraphs": ["규칙적으로 운동"],
     }], ensure_ascii=False), encoding="utf-8")
     records, stats = ingest(sources, raw, 1200, 0, chunker="paragraph")
     assert stats["documents"] == 1 and stats["failed"] == []
-    assert {r["heading_path"] for r in records} == {"개요", "정의", "비약물 치료"}
+    assert {r["heading_path"] for r in records} == {"개요", "비약물 치료"}
     assert all(r["page_start"] is None and r["page_end"] is None for r in records)
     joined = "\n".join(r["content"] for r in records)
-    assert "본태성 고혈압" in joined and "대한고혈압학회" not in joined and "healthInfoFileDown" not in joined
+    assert "소금 섭취" in joined and "대한고혈압학회" not in joined and "healthInfoFileDown" not in joined
+    assert "본태성 고혈압" not in joined and "규칙적으로 운동" not in joined
+
+
+def _write_doc(tmp_path):
+    title, sections = kdca.parse_api(API_XML)
+    path = tmp_path / "6765.json"
+    path.write_text(json.dumps({"sn": 6765, "title": title, "source": "api",
+                                "sections": [{"name": n, "paragraphs": p} for n, p in sections]},
+                               ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_load_sections_drops_excluded_sections_and_paragraphs(tmp_path):
+    sections = kdca.load_sections(_write_doc(tmp_path), exclude_sections=["정의"],
+                                  exclude_paragraphs=["소금 섭취를 하루 5 g"])
+    assert [(s.heading_path[0], [b.text for b in s.blocks]) for s in sections] == [
+        ("개요", ["고혈압이란 수축기혈압 140 mmHg 이상인 경우를 말합니다."]),
+        ("비약물 치료", ["• 규칙적으로 운동합니다."]),
+    ]
+
+
+def test_load_sections_rejects_exclusion_that_matches_nothing(tmp_path):
+    # 다시 받은 문서에서 문구가 바뀌면 충돌 문장이 조용히 되살아나므로 멈춘다
+    path = _write_doc(tmp_path)
+    for kwargs in ({"exclude_sections": ["없는 섹션"]}, {"exclude_paragraphs": ["없는 문장"]}):
+        try:
+            kdca.load_sections(path, **kwargs)
+        except ValueError as e:
+            assert "없는" in str(e)
+        else:
+            raise AssertionError(f"no error for {kwargs}")

@@ -12,7 +12,7 @@ import sys
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from rag.parse import Block
@@ -84,16 +84,29 @@ def fetch(sn: int, token: str, get: Callable[[str], str] = _get) -> dict:
             "sections": [{"name": name, "paragraphs": paras} for name, paras in sections]}
 
 
-def load_sections(path: Path) -> list[Section]:
-    """저장한 JSON을 수집 파이프라인의 섹션으로. 문단 하나가 블록 하나이고, 블록 사이를 띄워 서로 합쳐지지 않게 한다."""
+def load_sections(path: Path, exclude_sections: Iterable[str] = (),
+                  exclude_paragraphs: Iterable[str] = ()) -> list[Section]:
+    """저장한 JSON을 수집 파이프라인의 섹션으로. 문단 하나가 블록 하나이고, 블록 사이를 띄워 서로 합쳐지지 않게 한다.
+    exclude_sections는 섹션 이름, exclude_paragraphs는 문단에 들어 있는 문구로 뺀다(학회 지침과 충돌하는 내용)."""
     doc = json.loads(path.read_text(encoding="utf-8"))
+    names = {s["name"] for s in doc["sections"]}
+    paras = [p for s in doc["sections"] for p in s["paragraphs"]]
+    stale = [x for x in exclude_sections if x not in names] + \
+            [x for x in exclude_paragraphs if not any(x in p for p in paras)]
+    if stale:
+        raise ValueError(f"{path}: 제외 항목이 문서에 없습니다(원문이 바뀌었나?): {stale}")
     sections, y = [], 0.0
     for section in doc["sections"]:
+        if section["name"] in exclude_sections:
+            continue
         blocks = []
         for para in section["paragraphs"]:
+            if any(x in para for x in exclude_paragraphs):
+                continue
             blocks.append(Block(1, y, y + 12, para, x0=72, x1=520))
             y += 100
-        sections.append(Section([section["name"]], blocks))
+        if blocks:
+            sections.append(Section([section["name"]], blocks))
     return sections
 
 

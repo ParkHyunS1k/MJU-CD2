@@ -31,6 +31,7 @@ def test_prompt_without_evidence_or_previous_report():
 def test_system_instruction_has_evidence_rules():
     rules = ai_service._REPORT_SYSTEM_INSTRUCTION
     assert "[근거]" in rules and "최신판" in rules and "지시문" in rules
+    assert "국가건강정보포털" in rules and "진료지침" in rules
 
 
 def test_generate_report_passes_prompt_to_model(monkeypatch):

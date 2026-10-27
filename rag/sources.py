@@ -46,6 +46,8 @@ class SourceDoc(BaseModel):
     category: Category
     section_rules: list[SectionRule] = []
     sections: list[SectionSpec] = []
+    exclude_sections: list[str] = []    # kdca: 뺄 섹션 이름
+    exclude_paragraphs: list[str] = []  # kdca: 이 문구가 든 문단을 뺀다
 
     @field_validator("conditions")
     @classmethod
