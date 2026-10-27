@@ -2,6 +2,7 @@
 검증을 통과한 근거를 labels.jsonl에 더한다. 저장소 루트에서
 
     python -m rag.eval.augment collect --chunker paragraph --out rag/eval/data/augment_paragraph.json
+        [--embedding bge-m3 gemini-768]   (여러 모델의 상위 k개를 합친다)
     python -m rag.eval.augment judge --chunker paragraph --items ... --judgments ...   (GPT, Codex CLI)
     python -m rag.eval.augment apply --chunker paragraph --items ... --judgments ...
 """
@@ -90,15 +91,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--items", type=Path)
     parser.add_argument("--judgments", type=Path)
+    parser.add_argument("--embedding", nargs="+", default=["bge-m3"],
+                        help="여러 개면 모델마다 상위 k개를 합쳐 후보로 모은다")
     args = parser.parse_args(argv)
 
     ctx = run.Ctx()
-    state = {**run.BASE, "chunker": args.chunker, "max_chars": args.max_chars, "overlap": args.overlap,
-             "embedding_model": "bge-m3"}  # 2단계 비교와 같은 임베딩
+    state = {**run.BASE, "chunker": args.chunker, "max_chars": args.max_chars, "overlap": args.overlap}
     chunks = run.chunks_for(state)
     if args.action == "collect":
-        ranked, _ = run.retrieve(state, chunks, [q["text"] for q in ctx.queries])
-        items = collect(chunks, ctx.queries, ctx.labels, ranked, args.k)
+        texts = [q["text"] for q in ctx.queries]
+        per_model = [run.retrieve({**state, "embedding_model": m}, chunks, texts)[0] for m in args.embedding]
+        ranked = [list(dict.fromkeys(i for r in rows for i in r[:args.k])) for rows in zip(*per_model)]
+        items = collect(chunks, ctx.queries, ctx.labels, ranked, args.k * len(args.embedding))
         args.out.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"{args.out}: {len(items)} queries, {sum(len(i['candidates']) for i in items)} candidates")
         return 0
