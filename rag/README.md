@@ -55,6 +55,16 @@ PDF를 `rag/raw/`에 넣고 `sources.json`에 등록합니다. 원본 PDF와 산
 - `title`이 청크의 장·절 경로가 되고, `category`가 있으면 그 장의 태그가 됩니다(없으면 `section_rules` → 문서 `category` 순).
 - 쪽 범위가 겹치거나 제목이 중복되면 오류입니다. 범위에 글자가 없으면 경고만 남깁니다.
 
+### 국가건강정보포털 문서: `kind: "kdca"`
+
+```json
+{"id": "kdca-6765", "kind": "kdca", "cntnts_sn": 6765, "file": "kdca/6765.json", "title": "고혈압 (국가건강정보포털)", ...,
+ "exclude_sections": ["생활습관 관리"], "exclude_paragraphs": ["소금을 하루 6 g 이하로"]}
+```
+
+- `python -m rag.kdca`가 `kind: "kdca"` 문서를 API로 받아 `rag/raw/kdca/<번호>.json`에 저장합니다(이미 받은 것은 건너뜀, `--force`로 다시 받기). 토큰은 루트 `.env`의 `KDCA_API_TOKEN`이고, API 본문이 비면 공개 웹 페이지에서 받습니다.
+- `exclude_sections`(섹션 이름)와 `exclude_paragraphs`(문단에 든 문구)로 학회 진료지침과 수치가 다른 부분을 뺍니다. 다시 받은 원문에서 문구가 사라지면 수집이 오류로 멈춥니다.
+
 ## 실행
 
 저장소 루트에서 실행합니다.
