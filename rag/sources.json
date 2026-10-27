@@ -386,5 +386,126 @@
       {"match": "정의", "category": "criteria"},
       {"match": "진단", "category": "criteria"}
     ]
+  },
+  {
+    "id": "kdca-6547",
+    "kind": "kdca",
+    "cntnts_sn": 6547,
+    "file": "kdca/6547.json",
+    "title": "건강한 체중조절을 위한 식사 (국가건강정보포털)",
+    "publisher": "질병관리청",
+    "year": 2026,
+    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6547",
+    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
+    "conditions": ["obesity"],
+    "category": "diet",
+    "section_rules": [
+      {"match": "식이", "category": "diet"},
+      {"match": "식사", "category": "diet"},
+      {"match": "영양", "category": "diet"},
+      {"match": "운동", "category": "exercise"},
+      {"match": "정의", "category": "criteria"},
+      {"match": "진단", "category": "criteria"}
+    ]
+  },
+  {
+    "id": "kdca-6693",
+    "kind": "kdca",
+    "cntnts_sn": 6693,
+    "file": "kdca/6693.json",
+    "title": "식이영양 (국가건강정보포털)",
+    "publisher": "질병관리청",
+    "year": 2026,
+    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6693",
+    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
+    "conditions": ["general"],
+    "category": "diet",
+    "section_rules": [
+      {"match": "식이", "category": "diet"},
+      {"match": "식사", "category": "diet"},
+      {"match": "영양", "category": "diet"},
+      {"match": "운동", "category": "exercise"},
+      {"match": "정의", "category": "criteria"},
+      {"match": "진단", "category": "criteria"}
+    ],
+    "exclude_paragraphs": ["대한고혈압학회에서는 하루 소금 섭취량을 6 g 이하로"]
+  },
+  {
+    "id": "kdca-1342",
+    "kind": "kdca",
+    "cntnts_sn": 1342,
+    "file": "kdca/1342.json",
+    "title": "탄수화물 (국가건강정보포털)",
+    "publisher": "질병관리청",
+    "year": 2026,
+    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=1342",
+    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
+    "conditions": ["general"],
+    "category": "diet",
+    "section_rules": [
+      {"match": "식이", "category": "diet"},
+      {"match": "식사", "category": "diet"},
+      {"match": "영양", "category": "diet"},
+      {"match": "운동", "category": "exercise"},
+      {"match": "정의", "category": "criteria"},
+      {"match": "진단", "category": "criteria"}
+    ],
+    "exclude_paragraphs": ["첨가당 섭취량은 총에너지의 10~20% 이내"]
+  },
+  {
+    "id": "kdca-6548",
+    "kind": "kdca",
+    "cntnts_sn": 6548,
+    "file": "kdca/6548.json",
+    "title": "건강기능식품 (국가건강정보포털)",
+    "publisher": "질병관리청",
+    "year": 2026,
+    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6548",
+    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
+    "conditions": ["general"],
+    "category": "supplement"
+  },
+  {
+    "id": "kdca-5297",
+    "kind": "kdca",
+    "cntnts_sn": 5297,
+    "file": "kdca/5297.json",
+    "title": "음주 (국가건강정보포털)",
+    "publisher": "질병관리청",
+    "year": 2026,
+    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5297",
+    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
+    "conditions": ["general"],
+    "category": "lifestyle",
+    "section_rules": [
+      {"match": "식이", "category": "diet"},
+      {"match": "식사", "category": "diet"},
+      {"match": "영양", "category": "diet"},
+      {"match": "운동", "category": "exercise"},
+      {"match": "정의", "category": "criteria"},
+      {"match": "진단", "category": "criteria"}
+    ],
+    "exclude_paragraphs": ["일일 1~2잔의 음주는 관상동맥질환의 위험률을 낮출", "하루 1잔(10 g) 이하로 알코올 섭취를 제한"]
+  },
+  {
+    "id": "kdca-6764",
+    "kind": "kdca",
+    "cntnts_sn": 6764,
+    "file": "kdca/6764.json",
+    "title": "흡연 (국가건강정보포털)",
+    "publisher": "질병관리청",
+    "year": 2026,
+    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6764",
+    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
+    "conditions": ["general"],
+    "category": "lifestyle",
+    "section_rules": [
+      {"match": "식이", "category": "diet"},
+      {"match": "식사", "category": "diet"},
+      {"match": "영양", "category": "diet"},
+      {"match": "운동", "category": "exercise"},
+      {"match": "정의", "category": "criteria"},
+      {"match": "진단", "category": "criteria"}
+    ]
   }
 ]
