@@ -12,6 +12,9 @@ venv/
 node_modules
 .omc/
 .omx/
+발표/
+# 개인 인바디 결과지(회원번호에 개인정보)
+인바디/
 
 # 학습 데이터(국민건강영양조사 원시자료)와 실험 산출물
 training/data/
@@ -26,3 +29,6 @@ rag/eval/cache/
 rag/eval/data/review_items.json
 rag/eval/data/review_decisions.json
 rag/eval/data/augment_*.json
+
+# 국가건강정보포털 API URL(토큰 포함)
+rag/kdca_urls.json
