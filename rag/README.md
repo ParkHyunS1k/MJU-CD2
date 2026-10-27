@@ -11,7 +11,7 @@ AI 리포트가 진료지침·공공 건강정보를 근거로 쓰도록, 문서
 | PDF 파서 | PyMuPDF | pdfplumber, 띄어쓰기 복원과 차이 없음 |
 | 청킹 | 문단 묶기 1,200자, 겹침 0 (잠정) | 문단 경계를 지킴. 표·캡션·참고문헌 제거 |
 | 임베딩 | gemini-embedding-001, 768차원 | 8개 모델 중 1위(nDCG 0.810). BGE-M3(0.791)와 차이는 작지만 서버에 모델을 올리지 않아도 됨 |
-| 벡터 DB | Supabase Postgres + pgvector | `halfvec(768)`, HNSW 코사인, RPC `match_rag_chunks` |
+| 벡터 DB | Supabase Postgres + pgvector | 앱이 이미 쓰는 Supabase라 별도 벡터 서비스·비용이 없고, 청크 수백 개 규모에서는 전용 DB가 필요 없음. `halfvec(768)`(저장 공간 절반), HNSW 코사인, RPC `match_rag_chunks`(서버 키로만 호출) |
 | 하이브리드·리랭커 | 사용 안 함 | BM25를 더하면 nDCG 0.877 → 0.757, 리랭커는 0.788에 쿼리당 약 3초 추가 |
 | 검색 | 키워드형 쿼리, 쿼리당 상위 3개, 코사인 0.7028 이상 | 정답 없는 쿼리 3개를 모두 거름 |
 
