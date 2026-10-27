@@ -160,27 +160,6 @@
     ]
   },
   {
-    "id": "kdca-5302",
-    "kind": "kdca",
-    "cntnts_sn": 5302,
-    "file": "kdca/5302.json",
-    "title": "고혈압심장질환 (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5302",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["hypertension"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
     "id": "kdca-6855",
     "kind": "kdca",
     "cntnts_sn": 6855,
@@ -202,69 +181,6 @@
     ]
   },
   {
-    "id": "kdca-6697",
-    "kind": "kdca",
-    "cntnts_sn": 6697,
-    "file": "kdca/6697.json",
-    "title": "고혈압성 콩팥병 (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6697",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["hypertension"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6254",
-    "kind": "kdca",
-    "cntnts_sn": 6254,
-    "file": "kdca/6254.json",
-    "title": "고혈압과 눈(고혈압망막병증) (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6254",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["hypertension"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-5303",
-    "kind": "kdca",
-    "cntnts_sn": 5303,
-    "file": "kdca/5303.json",
-    "title": "고혈압 환자의 운동요법 (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5303",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["hypertension"],
-    "category": "exercise",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
     "id": "kdca-5305",
     "kind": "kdca",
     "cntnts_sn": 5305,
@@ -273,27 +189,6 @@
     "publisher": "질병관리청",
     "year": 2026,
     "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5305",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-5221",
-    "kind": "kdca",
-    "cntnts_sn": 5221,
-    "file": "kdca/5221.json",
-    "title": "당뇨망막병증 (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5221",
     "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
     "conditions": ["diabetes"],
     "category": "lifestyle",
@@ -328,27 +223,6 @@
     ]
   },
   {
-    "id": "kdca-6471",
-    "kind": "kdca",
-    "cntnts_sn": 6471,
-    "file": "kdca/6471.json",
-    "title": "당뇨환자의 약물요법 (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6471",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
     "id": "kdca-3390",
     "kind": "kdca",
     "cntnts_sn": 3390,
@@ -360,132 +234,6 @@
     "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
     "conditions": ["diabetes"],
     "category": "exercise",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6692",
-    "kind": "kdca",
-    "cntnts_sn": 6692,
-    "file": "kdca/6692.json",
-    "title": "당뇨병성 족부병증 (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6692",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6721",
-    "kind": "kdca",
-    "cntnts_sn": 6721,
-    "file": "kdca/6721.json",
-    "title": "소변이상(당뇨) (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": null,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6721",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6902",
-    "kind": "kdca",
-    "cntnts_sn": 6902,
-    "file": "kdca/6902.json",
-    "title": "당뇨병 합병증(급성 합병증) (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6902",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6899",
-    "kind": "kdca",
-    "cntnts_sn": 6899,
-    "file": "kdca/6899.json",
-    "title": "당뇨병 합병증(만성 합병증) (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6899",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6901",
-    "kind": "kdca",
-    "cntnts_sn": 6901,
-    "file": "kdca/6901.json",
-    "title": "당뇨병 합병증(당뇨병케토산증, 고혈당고삼투질상태) (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6901",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6900",
-    "kind": "kdca",
-    "cntnts_sn": 6900,
-    "file": "kdca/6900.json",
-    "title": "당뇨병 합병증(저혈당) (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6900",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["diabetes"],
-    "category": "lifestyle",
     "section_rules": [
       {"match": "식이", "category": "diet"},
       {"match": "식사", "category": "diet"},
@@ -562,27 +310,6 @@
     "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
     "conditions": ["dyslipidemia"],
     "category": "lifestyle",
-    "section_rules": [
-      {"match": "식이", "category": "diet"},
-      {"match": "식사", "category": "diet"},
-      {"match": "영양", "category": "diet"},
-      {"match": "운동", "category": "exercise"},
-      {"match": "정의", "category": "criteria"},
-      {"match": "진단", "category": "criteria"}
-    ]
-  },
-  {
-    "id": "kdca-6714",
-    "kind": "kdca",
-    "cntnts_sn": 6714,
-    "file": "kdca/6714.json",
-    "title": "이상지질혈증 식사요법 (국가건강정보포털)",
-    "publisher": "질병관리청",
-    "year": 2026,
-    "url": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6714",
-    "license_note": "공공누리 제4유형(출처표시, 상업적 이용금지, 변경금지)",
-    "conditions": ["dyslipidemia"],
-    "category": "diet",
     "section_rules": [
       {"match": "식이", "category": "diet"},
       {"match": "식사", "category": "diet"},
