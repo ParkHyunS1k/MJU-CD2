@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str
     SUPABASE_SERVICE_ROLE_KEY: str
 
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: str  # 사진 수치 추출, 검색 임베딩
+    OPENAI_API_KEY: str  # 리포트 생성
 
     ALLOWED_ORIGINS: str = "*"
 

@@ -3,6 +3,7 @@ import logging
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+import openai
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, ValidationError
@@ -15,8 +16,9 @@ if TYPE_CHECKING:
     from app.services.retrieval_service import Evidence
 
 MODEL = "gemini-2.5-flash"
-REPORT_MODELS = (MODEL, "gemini-2.5-flash-lite")
 EXTRACT_MODELS = (MODEL, "gemini-2.5-flash-lite")
+REPORT_MODELS = ("gpt-6.1-terra", "gpt-6-luna")
+REPORT_REASONING = {"effort": "low"}  # 주어진 근거를 정리하는 일이라 깊은 추론보다 응답 속도가 중요하다
 _RETRYABLE_GEMINI_STATUS_CODES = {429, 500, 502, 503, 504}
 
 log = logging.getLogger(__name__)
@@ -25,6 +27,11 @@ log = logging.getLogger(__name__)
 @lru_cache
 def get_gemini() -> genai.Client:
     return genai.Client(api_key=get_settings().GEMINI_API_KEY)
+
+
+@lru_cache
+def get_openai() -> openai.OpenAI:
+    return openai.OpenAI(api_key=get_settings().OPENAI_API_KEY)
 
 
 _REPORT_SYSTEM_INSTRUCTION = (
@@ -64,7 +71,9 @@ def _parse_json_response(text: str | None, schema: type[BaseModel]) -> dict:
         raise ValueError(f"Invalid AI response schema: {e}") from e
 
 
-def _is_retryable_gemini_error(error: Exception) -> bool:
+def _is_retryable_error(error: Exception) -> bool:
+    if isinstance(error, openai.APIConnectionError):  # 타임아웃 포함
+        return True
     status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
     if status_code in _RETRYABLE_GEMINI_STATUS_CODES:
         return True
@@ -139,7 +148,7 @@ def generate_report(
     evidence는 [근거] 블록으로 넣어 항목마다 source_ids로 인용하게 하고, 보충제는 근거에 있는 원료만 제안한다.
     previous_report는 직전 리포트 요약으로, 조언의 연속성을 위해 참고만 한다.
     """
-    client = get_gemini()
+    client = get_openai()
 
     payload = {
         "user_profile": {k: user_profile.get(k) for k in ("gender", "birth_year", "fitness_goal")},
@@ -149,35 +158,34 @@ def generate_report(
     }
     prompt = build_report_prompt(payload, evidence or [], previous_report)
 
-    config = types.GenerateContentConfig(
-        system_instruction=_REPORT_SYSTEM_INSTRUCTION,
-        response_mime_type="application/json",
-        response_schema=AIReportContent,
-        max_output_tokens=16384,
-    )
     last_error: Exception | None = None
     for model in REPORT_MODELS:
         try:
-            res = client.models.generate_content(
+            res = client.responses.parse(
                 model=model,
-                contents=prompt,
-                config=config,
+                instructions=_REPORT_SYSTEM_INSTRUCTION,
+                input=prompt,
+                text_format=AIReportContent,
+                reasoning=REPORT_REASONING,
+                max_output_tokens=16384,
             )
-            return _parse_json_response(res.text, AIReportContent)
+            if res.output_parsed is None:  # 거절하거나 토큰 한도로 중단된 응답
+                raise ValueError("Empty AI response")
+            return res.output_parsed.model_dump(mode="json")
         except Exception as e:
             last_error = e
             if isinstance(e, ValueError):
                 if model == REPORT_MODELS[-1]:
                     raise
-                log.warning("Gemini report model %s returned invalid JSON, retrying fallback: %s", model, e)
+                log.warning("report model %s returned no valid JSON, retrying fallback: %s", model, e)
                 continue
-            if not _is_retryable_gemini_error(e):
+            if not _is_retryable_error(e):
                 raise
             if model == REPORT_MODELS[-1]:
                 raise ValueError(
-                    "Gemini API가 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요."
+                    "AI 서버가 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요."
                 ) from e
-            log.warning("Gemini report model %s failed, retrying fallback: %s", model, e)
+            log.warning("report model %s failed, retrying fallback: %s", model, e)
     else:
         raise last_error or ValueError("Failed to generate AI response")
 
@@ -222,7 +230,7 @@ def extract_inbody_from_image(file_bytes: bytes, mime_type: str) -> dict:
                     raise
                 log.warning("Gemini extract model %s returned invalid JSON, retrying fallback: %s", model, e)
                 continue
-            if not _is_retryable_gemini_error(e):
+            if not _is_retryable_error(e):
                 raise
             if model == EXTRACT_MODELS[-1]:
                 raise ValueError(

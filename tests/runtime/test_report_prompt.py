@@ -54,17 +54,50 @@ def test_guide_lets_plan_shrink_and_cites_actions():
     assert "actions는 [근거]" in guide
 
 
-def test_generate_report_passes_prompt_to_model(monkeypatch):
-    captured = {}
+class _FakeResponses:
+    def __init__(self, outcomes):
+        self.outcomes, self.calls = list(outcomes), []
 
-    class FakeModels:
-        def generate_content(self, model, contents, config):
-            captured["contents"] = contents
-            raise ValueError("stop")
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return type("R", (), {"output_parsed": outcome})()
 
-    monkeypatch.setattr(ai_service, "get_gemini", lambda: type("C", (), {"models": FakeModels()})())
-    try:
-        ai_service.generate_report([], {}, evidence=[_ev("S1")], previous_report=None)
-    except ValueError:
-        pass
-    assert "[S1]" in captured["contents"]
+
+def _fake_openai(monkeypatch, outcomes):
+    responses = _FakeResponses(outcomes)
+    monkeypatch.setattr(ai_service, "get_openai", lambda: type("C", (), {"responses": responses})())
+    return responses
+
+
+def _report():
+    from app.schemas.inbody import AIReportContent
+    return AIReportContent.model_validate({
+        "summary": {"title": "t", "overall_message": "m", "key_focus": []},
+        "body_composition_report": {"strengths": [], "watch_points": []},
+        "risk_report": [], "lifestyle_plan": [], "supplement_candidates": [],
+        "cautions": {"medical_disclaimer": "d", "consult_doctor_if": []},
+    })
+
+
+def test_generate_report_calls_gpt_with_prompt_and_schema(monkeypatch):
+    responses = _fake_openai(monkeypatch, [_report()])
+    out = ai_service.generate_report([], {}, evidence=[_ev("S1")], previous_report=None)
+    call = responses.calls[0]
+    assert call["model"] == "gpt-6.1-terra" and call["reasoning"] == {"effort": "low"}
+    assert "[S1]" in call["input"] and call["instructions"] == ai_service._REPORT_SYSTEM_INSTRUCTION
+    assert call["text_format"].__name__ == "AIReportContent"
+    assert out["summary"]["title"] == "t"
+
+
+def test_generate_report_falls_back_on_rate_limit_and_empty_parse(monkeypatch):
+    busy = type("E", (Exception,), {"status_code": 429})("busy")
+    responses = _fake_openai(monkeypatch, [busy, _report()])
+    ai_service.generate_report([], {}, evidence=[], previous_report=None)
+    assert [c["model"] for c in responses.calls] == ["gpt-6.1-terra", "gpt-6-luna"]
+
+    responses = _fake_openai(monkeypatch, [None, _report()])  # 거절·중단되면 파싱 결과가 없다
+    ai_service.generate_report([], {}, evidence=[], previous_report=None)
+    assert [c["model"] for c in responses.calls] == ["gpt-6.1-terra", "gpt-6-luna"]
