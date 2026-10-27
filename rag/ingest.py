@@ -11,6 +11,7 @@ from pathlib import Path
 
 from rag.chunk import chunk_paragraphs, chunk_section, chunk_single
 from rag.clean import clean_blocks, drop_references
+from rag.kdca import load_sections as load_kdca_sections
 from rag.parse import Block, parse_pdf, parse_pdf_plumber
 from rag.records import build_records, dedupe
 from rag.sections import build_sections, sections_from_spec
@@ -61,6 +62,13 @@ def ingest(
     parse = PARSERS[parser]
     make_chunks = CHUNKERS[chunker]
     for source, path in load_sources(sources_path, raw_dir):
+        if source.kind == "kdca":
+            sections = load_kdca_sections(path)
+            chunks = [chunk for section in sections for chunk in make_chunks(section, max_chars, overlap)]
+            # 웹 문서라 쪽 번호가 없다
+            records.extend({**r, "page_start": None, "page_end": None} for r in build_records(source, chunks))
+            stats["documents"] += 1
+            continue
         try:
             parsed = parse(path)
         except Exception:

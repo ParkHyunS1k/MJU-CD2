@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -33,6 +34,8 @@ class SectionSpec(BaseModel):
 
 class SourceDoc(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    kind: Literal["pdf", "kdca"] = "pdf"  # kdca: 국가건강정보포털 건강정보(rag.kdca가 받은 JSON)
+    cntnts_sn: int | None = None          # kdca 콘텐츠 번호
     file: str
     title: str = Field(min_length=1)
     publisher: str | None = None
