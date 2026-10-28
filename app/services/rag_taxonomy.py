@@ -5,6 +5,8 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
+from app.services.personal_metrics import ABDOMINAL_RATIO, OBESITY_BMI, VISCERAL_FAT_LEVEL
+
 log = logging.getLogger(__name__)
 
 CONDITION_KEYS = frozenset({
@@ -56,9 +58,6 @@ _GENERAL_KEYWORDS = {
 # 예측 모델 질환 키 → 용어집 키. 콜레스테롤과 중성지방은 지침 체계에서 이상지질혈증 하나다.
 RISK_CONDITIONS = {"hypertension": "hypertension", "diabetes": "diabetes",
                    "cholesterol": "dyslipidemia", "triglyceride": "dyslipidemia"}
-OBESITY_BMI = 25.0
-ABDOMINAL_RATIO = {"male": 0.90, "female": 0.85}  # 복부지방률(허리/엉덩이) 복부비만 기준
-VISCERAL_FAT_LEVEL = 10
 
 
 @dataclass(frozen=True)
