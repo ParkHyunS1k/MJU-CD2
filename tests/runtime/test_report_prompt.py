@@ -144,3 +144,8 @@ def test_metric_keys_match_personal_metrics_names():
 def test_segmental_rules():
     rules = ai_service._REPORT_SYSTEM_INSTRUCTION
     assert "segmental" in rules and "[근거]에 나온 운동만" in rules and "좌우 차이" in rules
+
+
+def test_guide_prefers_trait_evidence():
+    guide = ai_service._REPORT_GUIDE
+    assert "특성 근거" in guide and "일반 근거보다" in guide
