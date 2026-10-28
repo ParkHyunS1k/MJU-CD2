@@ -52,3 +52,27 @@ def test_missing_inputs_are_omitted_not_errors():
     m = compute({"bmi": 24.0}, MALE)
     assert "height_cm" not in m and "kg_to_normal_bmi" not in m and m["bmi_band"] == "비만 전단계"
     assert len(METRIC_NAMES) == 13 and METRIC_NAMES["height"] == "키" and METRIC_NAMES["muscle_control"] == "근육조절"
+
+
+STD = "표준"
+
+
+def _seg(**over):
+    base = {"left_arm": STD, "right_arm": STD, "trunk": STD, "left_leg": STD, "right_leg": STD}
+    return {**base, **over}
+
+
+def test_segmental_summary_lists_non_standard_parts():
+    m = compute({"segmental_lean": _seg(left_leg="표준이하", right_leg="표준이하"),
+                 "segmental_fat": _seg(trunk="표준이상")}, MALE)
+    assert m["segmental"] == {"근육 표준이하": ["왼다리", "오른다리"], "체지방 표준이상": ["몸통"]}
+
+
+def test_segmental_left_right_difference():
+    m = compute({"segmental_lean": _seg(left_leg="표준이하"), "segmental_fat": _seg(left_arm="표준이상")}, MALE)
+    assert m["segmental"]["근육 좌우 차이"] == ["다리"] and m["segmental"]["체지방 좌우 차이"] == ["팔"]
+
+
+def test_segmental_absent_or_all_standard_is_omitted():
+    assert "segmental" not in compute({}, MALE)
+    assert "segmental" not in compute({"segmental_lean": _seg(), "segmental_fat": _seg()}, MALE)

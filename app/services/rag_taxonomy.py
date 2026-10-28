@@ -119,13 +119,19 @@ def trait_queries(disease_risks: list[dict], profile: dict, metrics: dict,
     """특성 종류마다 1개씩 먼저(표 순서), 남는 자리는 같은 순서로 두 번째 쿼리부터 채워 최대 4개 + 영양제 1개."""
     lean = metrics.get("bmi_band") in ("저체중", "정상")
     trends = (trend_analysis or {}).get("feature_trends", [])
+    segmental = metrics.get("segmental", {})
+    weak_parts = segmental.get("근육 표준이하", [])
+    # 코퍼스에 상체 운동 근거가 거의 없어 팔만 부족하면 큰 근육 근력운동 근거로 받는다
+    part_query = ("하체 근력운동 스쿼트 런지 다리 근육" if any("다리" in p for p in weak_parts)
+                  else "대근육 근력운동 상체 팔 근육" if weak_parts else None)
     groups: list[list[Query]] = [
         [Query("sarcopenia", "exercise", "근육량 증가 저항운동 단백질 섭취", "근육 부족")]
         if metrics.get("muscle_status", {}).get("status") == "표준 이하" else [],
+        [Query("sarcopenia", "exercise", part_query, "부위 근육 부족")] if part_query else [],
         [Query("obesity", "exercise", "체지방률 감소 근력운동 체성분 개선", "체지방 과다")]
         if lean and metrics.get("body_fat_status", {}).get("status") in ("경도비만", "비만") else [],
         [Query("metabolic_syndrome", "lifestyle", "복부비만 내장지방 감소 운동 식사", "복부비만")]
-        if metrics.get("abdominal") else [],
+        if metrics.get("abdominal") or "몸통" in segmental.get("체지방 표준이상", []) else [],
         [Query(c, "lifestyle", _PRE_STAGE[c], "전단계 위험") for c in _risk_conditions(disease_risks, {"medium"})],
         [Query(c, "lifestyle", f"{CONDITION_NAMES[c]} 가족력 고위험군 조기 예방", "가족력")
          for c, key in _FAMILY.items() if profile.get(key) is True],

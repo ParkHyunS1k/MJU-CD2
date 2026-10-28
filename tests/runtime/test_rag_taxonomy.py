@@ -101,3 +101,23 @@ def test_lean_body_fat_trait_needs_bmi_under_23():
     lean = [q.text for q in _traits({"bmi": 22.0, "body_fat_percentage": 26.0}, {"gender": "male"})]
     heavy = [q.text for q in _traits({"bmi": 24.0, "body_fat_percentage": 26.0}, {"gender": "male"})]
     assert "체지방률 감소 근력운동 체성분 개선" in lean and "체지방률 감소 근력운동 체성분 개선" not in heavy
+
+
+def _parts(**over):
+    return {"left_arm": "표준", "right_arm": "표준", "trunk": "표준", "left_leg": "표준", "right_leg": "표준", **over}
+
+
+def test_lower_body_muscle_trait():
+    qs = _traits({"segmental_lean": _parts(left_leg="표준이하")}, {"gender": "male"})
+    assert qs[0].trait == "부위 근육 부족" and qs[0].text == "하체 근력운동 스쿼트 런지 다리 근육"
+
+
+def test_upper_body_only_uses_large_muscle_query():
+    qs = _traits({"segmental_lean": _parts(left_arm="표준이하", right_arm="표준이하")}, {"gender": "male"})
+    assert qs[0].text == "대근육 근력운동 상체 팔 근육"
+
+
+def test_trunk_fat_triggers_abdominal_and_order_after_whole_body_muscle():
+    qs = _traits({"segmental_lean": _parts(right_leg="표준이하"), "segmental_fat": _parts(trunk="표준이상"),
+                  "muscle_control": 1.0}, {"gender": "male"})
+    assert [q.trait for q in qs[:3]] == ["근육 부족", "부위 근육 부족", "복부비만"]

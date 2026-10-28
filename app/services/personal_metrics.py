@@ -22,6 +22,26 @@ METRIC_NAMES = {
 }
 
 
+# 결과지 부위별 분석의 부위 키와 이름. 좌우 쌍은 판정이 다르면 "좌우 차이"로 표시한다
+SEGMENT_NAMES = {"left_arm": "왼팔", "right_arm": "오른팔", "trunk": "몸통", "left_leg": "왼다리", "right_leg": "오른다리"}
+_SEGMENT_PAIRS = {"팔": ("left_arm", "right_arm"), "다리": ("left_leg", "right_leg")}
+
+
+def _segmental(lean: dict | None, fat: dict | None) -> dict:
+    """표준이 아닌 부위만 모은다. 인바디 판정 그대로이며 우리가 다시 판정하지 않는다."""
+    out: dict[str, list[str]] = {}
+    for kind, parts in (("근육", lean or {}), ("체지방", fat or {})):
+        for status in ("표준이하", "표준이상"):
+            names = [name for key, name in SEGMENT_NAMES.items() if parts.get(key) == status]
+            if names:
+                out[f"{kind} {status}"] = names
+        uneven = [pair for pair, (left, right) in _SEGMENT_PAIRS.items()
+                  if parts.get(left) and parts.get(right) and parts[left] != parts[right]]
+        if uneven:
+            out[f"{kind} 좌우 차이"] = uneven
+    return out
+
+
 def _num(value) -> float | None:
     return None if value is None else float(value)
 
@@ -74,6 +94,10 @@ def compute(inbody: dict, profile: dict) -> dict:
         abdominal.append({"metric": "내장지방레벨", "value": fat_level, "threshold": VISCERAL_FAT_LEVEL})
     if abdominal:
         out["abdominal"] = abdominal
+
+    segmental = _segmental(inbody.get("segmental_lean"), inbody.get("segmental_fat"))
+    if segmental:
+        out["segmental"] = segmental
 
     out["missing_metrics"] = [name for key, name in METRIC_NAMES.items() if inbody.get(key) is None]
     return out

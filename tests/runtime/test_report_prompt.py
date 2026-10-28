@@ -139,3 +139,8 @@ def test_trait_header():
 def test_metric_keys_match_personal_metrics_names():
     from app.services.personal_metrics import METRIC_NAMES
     assert list(ai_service._INBODY_METRIC_KEYS) == list(METRIC_NAMES)
+
+
+def test_segmental_rules():
+    rules = ai_service._REPORT_SYSTEM_INSTRUCTION
+    assert "segmental" in rules and "[근거]에 나온 운동만" in rules and "좌우 차이" in rules
