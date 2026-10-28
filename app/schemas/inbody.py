@@ -142,6 +142,20 @@ class InBodyMetricsBase(BaseModel):
     fat_level: float | None = Field(None, ge=0)
     height: float | None = Field(None, gt=0, lt=300)  # 신장(cm)
     muscle_control: float | None = None  # 결과지 체중조절의 근육조절(kg). 양수면 그만큼 늘려야 표준
+    # 결과지의 나머지 수치(InBody270 기준). 표준 범위·운동소비열량은 키·성별·체중으로 계산되는 참고값이라 저장하지 않는다
+    inbody_score: float | None = Field(None, ge=0)
+    target_weight: float | None = Field(None, gt=0)  # 적정체중(kg)
+    weight_control: float | None = None  # 체중조절(kg)
+    fat_control: float | None = None  # 지방조절(kg)
+    fat_free_mass: float | None = Field(None, ge=0)  # 제지방량(kg)
+    obesity_degree: float | None = Field(None, ge=0)  # 비만도(%)
+    recommended_calories: float | None = Field(None, ge=0)  # 권장섭취열량(kcal)
+    bmi_evaluation: str | None = None  # 비만평가 BMI: 표준·저체중·과체중·심한과체중
+    body_fat_evaluation: str | None = None  # 비만평가 체지방률: 표준·경도비만·비만
+    # 부위별 근육·체지방: {"left_arm"|"right_arm"|"trunk"|"left_leg"|"right_leg": "표준"|"표준이하"|"표준이상"}
+    segmental_lean: dict[str, str] | None = None
+    segmental_fat: dict[str, str] | None = None
+    impedance: dict[str, dict[str, float]] | None = None  # {"20kHz"|"100kHz": {"RA","LA","TR","RL","LL": Ω}}
 
 
 class InBodyCreate(InBodyMetricsBase):

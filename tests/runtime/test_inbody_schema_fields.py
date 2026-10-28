@@ -10,3 +10,20 @@ def test_height_and_muscle_control_round_trip():
 
 def test_upload_mapping_carries_new_fields():
     assert {"height", "muscle_control"} <= set(INBODY_VALUE_FIELDS)
+
+
+SHEET = {  # 사용자 결과지(InBody270, 2023-06-23)에 적힌 값
+    "inbody_score": 80, "target_weight": 78.6, "weight_control": -4.4, "fat_control": -4.4,
+    "fat_free_mass": 66.8, "obesity_degree": 113, "recommended_calories": None,
+    "bmi_evaluation": "과체중", "body_fat_evaluation": "표준",
+    "segmental_lean": {"left_arm": "표준", "right_arm": "표준", "trunk": "표준", "left_leg": "표준", "right_leg": "표준"},
+    "segmental_fat": {"left_arm": "표준", "right_arm": "표준", "trunk": "표준이상", "left_leg": "표준", "right_leg": "표준"},
+    "impedance": {"20kHz": {"RA": 309.4, "LA": 307.1, "TR": 25.7, "RL": 271.6, "LL": 269.4},
+                  "100kHz": {"RA": 272.9, "LA": 271.6, "TR": 21.7, "RL": 235.5, "LL": 233.5}},
+}
+
+
+def test_all_sheet_values_round_trip():
+    dumped = InBodyCreate(weight=83.0, **SHEET).model_dump()
+    assert {k: dumped[k] for k in SHEET} == SHEET
+    assert set(SHEET) <= set(INBODY_VALUE_FIELDS)

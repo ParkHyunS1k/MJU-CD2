@@ -21,6 +21,18 @@ INBODY_VALUE_FIELDS = (
     "fat_level",
     "height",
     "muscle_control",
+    "inbody_score",
+    "target_weight",
+    "weight_control",
+    "fat_control",
+    "fat_free_mass",
+    "obesity_degree",
+    "recommended_calories",
+    "bmi_evaluation",
+    "body_fat_evaluation",
+    "segmental_lean",
+    "segmental_fat",
+    "impedance",
 )
 
 
