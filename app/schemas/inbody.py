@@ -140,6 +140,8 @@ class InBodyMetricsBase(BaseModel):
     basal_metabolic_rate: float | None = Field(None, ge=0)
     abs_fat: float | None = Field(None, ge=0)
     fat_level: float | None = Field(None, ge=0)
+    height: float | None = Field(None, gt=0, lt=300)  # 신장(cm)
+    muscle_control: float | None = None  # 결과지 체중조절의 근육조절(kg). 양수면 그만큼 늘려야 표준
 
 
 class InBodyCreate(InBodyMetricsBase):

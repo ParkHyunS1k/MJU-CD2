@@ -19,6 +19,8 @@ INBODY_VALUE_FIELDS = (
     "basal_metabolic_rate",
     "abs_fat",
     "fat_level",
+    "height",
+    "muscle_control",
 )
 
 
