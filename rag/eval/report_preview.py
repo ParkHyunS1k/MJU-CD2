@@ -1,7 +1,7 @@
 """리포트 미리보기와 개인화 비교. 앱과 같은 흐름(개인 지표 → 특성·질환 쿼리 → 검색 → GPT 리포트 → 인용 검증)으로
 KNHANES 사례(+ 선택한 인바디 기록)의 리포트를 만들고, 바꾸기 전 결과와 비교한다. 저장소 루트에서
 
-    python -m rag.eval.report_preview run --out rag/eval/preview/after.json [--inbody-json 기록.json]
+    python -m rag.eval.report_preview run --out rag/eval/preview/after.json [--inbody-json 기록.json] [--synthetic]
     python -m rag.eval.report_preview compare rag/eval/preview/before.json rag/eval/preview/after.json
 
 설계: docs/superpowers/specs/2026-10-28-report-personalization-design.md 5.5절. 결과물은 git 제외(개인 원자료 포함).
@@ -46,6 +46,30 @@ def mentions_user_number(text: str, user_values) -> bool:
     return bool(set(_NUMBER.findall(text)) & _numbers(user_values))
 
 
+# KNHANES 부위별 BIA(kg) → 결과지 부위 키. 몸통 근육은 제지방량에서 팔다리 근육을 뺀 근사값
+_LEAN = {"right_arm": "BIA_LRA", "left_arm": "BIA_LLA", "right_leg": "BIA_LRL", "left_leg": "BIA_LLL"}
+_FAT = {"right_arm": "BIA_FRA", "left_arm": "BIA_FLA", "trunk": "BIA_FT", "right_leg": "BIA_FRL", "left_leg": "BIA_FLL"}
+
+
+def segmental_labels(df) -> list[tuple[dict, dict]]:
+    """합성 데이터: 부위 kg ÷ 키² 를 성별 분포에서 하위 20%면 표준이하, 상위 20%면 표준이상으로 매긴다.
+    인바디의 실제 판정 기준은 공개되지 않아 분포로 흉내 낸 것이다. 행 순서대로 (근육, 체지방)."""
+    h2 = (df.HE_ht / 100) ** 2
+    lean = {k: df[c] for k, c in _LEAN.items()}
+    lean["trunk"] = df.BIA_FFM - sum(lean.values())
+    columns = {("lean", k): v / h2 for k, v in lean.items()} | {("fat", k): df[c] / h2 for k, c in _FAT.items()}
+    pct = {key: col.groupby(df.sex).rank(pct=True) for key, col in columns.items()}
+
+    def label(p: float) -> str:
+        return "표준이하" if p <= 0.2 else "표준이상" if p > 0.8 else "표준"
+
+    return [({k: label(pct[("lean", k)].iloc[i]) for k in SEGMENTS},
+             {k: label(pct[("fat", k)].iloc[i]) for k in SEGMENTS}) for i in range(len(df))]
+
+
+SEGMENTS = ("left_arm", "right_arm", "trunk", "left_leg", "right_leg")
+
+
 def _cases() -> list[dict]:
     """KNHANES 2023에서 위험 유형별 규칙으로 5명을 고른다(규칙·순번 고정)."""
     import pandas as pd
@@ -88,6 +112,44 @@ def _cases() -> list[dict]:
     ]
 
 
+def _synthetic_cases() -> list[dict]:
+    """KNHANES 2023 타겟 연령(25–45세)에 합성 부위 판정을 붙여 부위 유형별로 5명을 고른다."""
+    import pandas as pd
+
+    from training.features import build_features
+
+    df = pd.read_sas("training/data/hn23_all.sas7bdat", encoding="latin1")
+    X = build_features(df)
+    need = ["HE_ht", "HE_wt", "BIA_FFM", "BIA_BFM", "BIA_TBW", *_LEAN.values(), *_FAT.values()]
+    df = df[X.notna().all(axis=1) & df.age.between(25, 45) & df[need].notna().all(axis=1)].reset_index(drop=True)
+    X = build_features(df)
+    labels = segmental_labels(df)
+    rows = []
+    for i, (lean, fat) in enumerate(labels):
+        x = X.iloc[i]
+        rows.append({
+            "profile": {"gender": "female" if x.female else "male", "birth_year": 2026 - int(x.age),
+                        **{k: bool(x[k]) for k in ("fh_hypertension", "fh_diabetes", "fh_dyslipidemia")}},
+            "inbody": {"weight": float(df.HE_wt[i]), "height": float(df.HE_ht[i]), "bmi": float(x.bmi),
+                       "body_fat_percentage": float(x.body_fat_percentage), "body_fat_mass": float(df.BIA_BFM[i]),
+                       "body_water": float(df.BIA_TBW[i]), "basal_metabolic_rate": round(370 + 21.6 * float(df.BIA_FFM[i])),
+                       "segmental_lean": lean, "segmental_fat": fat},
+        })
+    low = lambda r, k: r["inbody"]["segmental_lean"][k] == "표준이하"  # noqa: E731
+    rules = [
+        ("합성: 하체 근육 부족", lambda r: low(r, "left_leg") and low(r, "right_leg")),
+        ("합성: 팔만 근육 부족", lambda r: low(r, "left_arm") and low(r, "right_arm")
+         and not (low(r, "left_leg") or low(r, "right_leg"))),
+        ("합성: 몸통 체지방 과다", lambda r: r["inbody"]["segmental_fat"]["trunk"] == "표준이상"
+         and not (low(r, "left_leg") or low(r, "right_leg"))),
+        ("합성: 다리 좌우 차이", lambda r: r["inbody"]["segmental_lean"]["left_leg"]
+         != r["inbody"]["segmental_lean"]["right_leg"]),
+        ("합성: 부위 모두 표준", lambda r: set(r["inbody"]["segmental_lean"].values()) == {"표준"}
+         and set(r["inbody"]["segmental_fat"].values()) == {"표준"}),
+    ]
+    return [{"case": name, **next(r for r in rows if cond(r))} for name, cond in rules]
+
+
 def _report(case: dict) -> dict:
     """앱의 _analyze_inbody_record와 같은 순서(DB·추세 제외)."""
     from app.services.ai_service import generate_report
@@ -112,11 +174,12 @@ def _report(case: dict) -> dict:
             "queries": [q.text for q in queries], "trait_hits": trait_hits, "report": content, "sources": sources}
 
 
-def run(out: Path, inbody_json: Path | None) -> None:
+def run(out: Path, inbody_json: Path | None, synthetic: bool = False) -> None:
     from dotenv import load_dotenv
 
     load_dotenv(".env")
-    cases = _cases() + (json.loads(inbody_json.read_text(encoding="utf-8")) if inbody_json else [])
+    cases = (_synthetic_cases() if synthetic else _cases()) + (
+        json.loads(inbody_json.read_text(encoding="utf-8")) if inbody_json else [])
     results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else []  # 중간에 끊겨도 이어서 한다
     done = {r["case"] for r in results}
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -184,12 +247,13 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("run")
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--inbody-json", type=Path)
+    r.add_argument("--synthetic", action="store_true", help="KNHANES에 합성 부위 판정을 붙인 5명")
     c = sub.add_parser("compare")
     c.add_argument("before", type=Path)
     c.add_argument("after", type=Path)
     args = parser.parse_args(argv)
     if args.action == "run":
-        run(args.out, args.inbody_json)
+        run(args.out, args.inbody_json, args.synthetic)
         return 0
     before, after = (json.loads(p.read_text(encoding="utf-8")) for p in (args.before, args.after))
     n = min(len(before), len(after))  # 바꾸기 전 결과는 KNHANES 5명뿐이다
