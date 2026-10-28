@@ -51,3 +51,53 @@ def test_every_query_pair_is_an_evaluated_scenario():
                        {"bmi": 30, "fat_level": 12}, "male")
     assert len(qs) == 16 and all(p in SCENARIOS for p in _pairs(qs))
     assert all(q.text == keyword_query(q.condition, q.category) for q in qs)
+
+
+from app.services.personal_metrics import compute  # noqa: E402
+from app.services.rag_taxonomy import trait_queries  # noqa: E402
+
+SUPP = "영양제 건강기능식품 선택 주의사항"
+
+
+def _traits(inbody, profile, risks=(), trend=None):
+    return trait_queries(list(risks), profile, compute(inbody, profile), trend)
+
+
+def test_traits_follow_profile():
+    prof = {"gender": "male", "fh_hypertension": True, "fh_diabetes": None}
+    texts = [q.text for q in _traits({"bmi": 24.0, "body_fat_percentage": 23.0}, prof, [_risk("cholesterol", "medium")])]
+    assert "이상지질혈증 경계 수치 생활습관 교정" in texts
+    assert "고혈압 가족력 고위험군 조기 예방" in texts
+    assert "비만 전단계 과체중 체중 증가 예방" in texts
+    assert not any("당뇨병 가족력" in t for t in texts)
+    assert texts[-1] == SUPP
+
+
+def test_one_per_trait_type_first():
+    prof = {"gender": "male", "fh_hypertension": True, "fh_diabetes": True, "fh_dyslipidemia": True}
+    risks = [_risk("hypertension", "medium"), _risk("diabetes", "medium"), _risk("triglyceride", "medium")]
+    qs = _traits({"bmi": 22.0, "abs_fat": 0.95}, prof, risks)
+    assert [q.trait for q in qs[:4]] == ["복부비만", "전단계 위험", "가족력", "여러 위험 동반"]
+
+
+def test_trait_cap_and_supplement_always():
+    prof = {"gender": "male", "fh_hypertension": True, "fh_diabetes": True, "fh_dyslipidemia": True}
+    risks = [_risk("hypertension", "medium"), _risk("diabetes", "high")]
+    trend = {"feature_trends": [{"feature_kor": "체중", "direction": "up"}]}
+    qs = _traits({"bmi": 22.0, "body_fat_percentage": 27.0, "abs_fat": 0.95, "muscle_control": 2.0}, prof, risks, trend)
+    assert len(qs) == 5 and qs[-1].trait == "영양제" and qs[-1].category == "supplement"
+    assert [q.trait for q in qs[:4]] == ["근육 부족", "체지방 과다", "복부비만", "전단계 위험"]
+    assert [q.text for q in _traits({}, {"gender": "female"})] == [SUPP]
+
+
+def test_weight_trend_trait():
+    up = {"feature_trends": [{"feature_kor": "체중", "direction": "up"}]}
+    stable = {"feature_trends": [{"feature_kor": "체중", "direction": "stable"}]}
+    assert "체중 증가 예방 체중 유지 관리" in [q.text for q in _traits({}, {"gender": "male"}, trend=up)]
+    assert "체중 증가 예방 체중 유지 관리" not in [q.text for q in _traits({}, {"gender": "male"}, trend=stable)]
+
+
+def test_lean_body_fat_trait_needs_bmi_under_23():
+    lean = [q.text for q in _traits({"bmi": 22.0, "body_fat_percentage": 26.0}, {"gender": "male"})]
+    heavy = [q.text for q in _traits({"bmi": 24.0, "body_fat_percentage": 26.0}, {"gender": "male"})]
+    assert "체지방률 감소 근력운동 체성분 개선" in lean and "체지방률 감소 근력운동 체성분 개선" not in heavy

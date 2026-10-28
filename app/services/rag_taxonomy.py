@@ -65,6 +65,7 @@ class Query:
     condition: str
     category: str
     text: str
+    trait: str | None = None  # 특성 쿼리면 특성 이름(근거 머리글에 쓴다)
 
 
 def keyword_query(condition: str, category: str) -> str:
@@ -98,3 +99,46 @@ def build_queries(disease_risks: list[dict], inbody: dict, gender: str | None) -
         conditions = ["general"]
     return [Query(condition, category, keyword_query(condition, category))
             for condition in conditions for c, category in SCENARIOS if c == condition]
+
+
+# 타겟(30대 전후 성인병 초기 위험군)의 개인 특성 쿼리. 설계: 2026-10-28-report-personalization-design.md 5.3절
+_PRE_STAGE = {"hypertension": "고혈압 전단계 주의혈압 생활습관 교정", "diabetes": "당뇨병 전단계 공복혈당장애 예방",
+              "dyslipidemia": "이상지질혈증 경계 수치 생활습관 교정"}
+_FAMILY = {"hypertension": "fh_hypertension", "diabetes": "fh_diabetes", "dyslipidemia": "fh_dyslipidemia"}
+_TRAIT_LIMIT = 4
+SUPPLEMENT_QUERY = Query("general", "supplement", "영양제 건강기능식품 선택 주의사항", "영양제")
+
+
+def _risk_conditions(disease_risks: list[dict], levels: set[str]) -> list[str]:
+    found = {RISK_CONDITIONS.get(r.get("disease_key")) for r in disease_risks if r.get("risk_level") in levels}
+    return [c for c in _FAMILY if c in found]  # 고혈압, 당뇨병, 이상지질혈증 순서
+
+
+def trait_queries(disease_risks: list[dict], profile: dict, metrics: dict,
+                  trend_analysis: dict | None) -> list[Query]:
+    """특성 종류마다 1개씩 먼저(표 순서), 남는 자리는 같은 순서로 두 번째 쿼리부터 채워 최대 4개 + 영양제 1개."""
+    lean = metrics.get("bmi_band") in ("저체중", "정상")
+    trends = (trend_analysis or {}).get("feature_trends", [])
+    groups: list[list[Query]] = [
+        [Query("sarcopenia", "exercise", "근육량 증가 저항운동 단백질 섭취", "근육 부족")]
+        if metrics.get("muscle_status", {}).get("status") == "표준 이하" else [],
+        [Query("obesity", "exercise", "체지방률 감소 근력운동 체성분 개선", "체지방 과다")]
+        if lean and metrics.get("body_fat_status", {}).get("status") in ("경도비만", "비만") else [],
+        [Query("metabolic_syndrome", "lifestyle", "복부비만 내장지방 감소 운동 식사", "복부비만")]
+        if metrics.get("abdominal") else [],
+        [Query(c, "lifestyle", _PRE_STAGE[c], "전단계 위험") for c in _risk_conditions(disease_risks, {"medium"})],
+        [Query(c, "lifestyle", f"{CONDITION_NAMES[c]} 가족력 고위험군 조기 예방", "가족력")
+         for c, key in _FAMILY.items() if profile.get(key) is True],
+        [Query("metabolic_syndrome", "lifestyle", "대사 위험인자 동반 생활습관 관리", "여러 위험 동반")]
+        if len(_risk_conditions(disease_risks, {"medium", "high"})) >= 2 else [],
+        [Query("obesity", "lifestyle", "체중 증가 예방 체중 유지 관리", "체중 증가 추세")]
+        if any(t.get("feature_kor") in ("체중", "체지방률") and t.get("direction") == "up" for t in trends) else [],
+        [Query("obesity", "lifestyle", "비만 전단계 과체중 체중 증가 예방", "비만 전단계")]
+        if metrics.get("bmi_band") == "비만 전단계" else [],
+    ]
+    picked: list[Query] = []
+    for rank in range(max((len(g) for g in groups), default=0)):
+        for group in groups:
+            if rank < len(group) and len(picked) < _TRAIT_LIMIT:
+                picked.append(group[rank])
+    return [*picked, SUPPLEMENT_QUERY]
