@@ -101,3 +101,17 @@ def test_generate_report_falls_back_on_rate_limit_and_empty_parse(monkeypatch):
     responses = _fake_openai(monkeypatch, [None, _report()])  # 거절·중단되면 파싱 결과가 없다
     ai_service.generate_report([], {}, evidence=[], previous_report=None)
     assert [c["model"] for c in responses.calls] == ["gpt-6.1-terra", "gpt-6-luna"]
+
+
+def test_rules_turn_guidelines_into_personal_targets():
+    rules, guide = ai_service._REPORT_SYSTEM_INSTRUCTION, ai_service._REPORT_GUIDE
+    assert "사용자 수치에 적용" in rules and "개인 목표" in rules
+    assert "high인 질환마다" in guide and "SHAP 기여가 큰" in guide and "같은 S번호" in guide
+
+
+def test_metrics_are_rounded_before_prompting(monkeypatch):
+    responses = _fake_openai(monkeypatch, [_report()])
+    ai_service.generate_report([], {}, inbody_metrics={"bmi": 24.943127, "abs_fat": 0.934}, evidence=[])
+    prompt = responses.calls[0]["input"]
+    assert '"bmi": 24.9' in prompt and "24.943" not in prompt
+    assert '"abs_fat": 0.93' in prompt  # 0.90 기준과 비교하는 값이라 두 자리를 남긴다
