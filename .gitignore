@@ -32,3 +32,6 @@ rag/eval/data/augment_*.json
 
 # 국가건강정보포털 API URL(토큰 포함)
 rag/kdca_urls.json
+
+# 리포트 미리보기 결과(KNHANES·개인 인바디 포함)
+rag/eval/preview/
