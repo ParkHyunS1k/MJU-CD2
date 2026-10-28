@@ -77,9 +77,10 @@ def _analyze_inbody_record(
     trend_analysis = _build_trend_analysis(records, disease_risks)
 
     metrics = compute_personal_metrics(target, user)
-    # 특성 쿼리를 앞에 둬야 쿼리마다 1위부터 모을 때 특성 근거가 먼저 들어간다
-    queries = [*trait_queries(disease_risks, user, metrics, trend_analysis),
-               *build_queries(disease_risks, target, user.get("gender"))]
+    # 상한이 쿼리 수 이상이라 모든 쿼리의 1위는 순서와 관계없이 들어간다. 질환 쿼리를 앞에 둬
+    # 특성의 2위 근거가 질환의 2·3위 근거를 밀어내지 않게 한다
+    queries = [*build_queries(disease_risks, target, user.get("gender")),
+               *trait_queries(disease_risks, user, metrics, trend_analysis)]
     try:
         evidence = retrieve(queries)
     except RetrievalError as e:

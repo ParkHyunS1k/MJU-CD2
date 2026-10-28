@@ -45,13 +45,15 @@ def test_report_gets_sources_and_prompt_gets_evidence(wired, monkeypatch):
     assert wired["saved"] is report
 
 
-def test_analysis_puts_trait_queries_first_and_passes_metrics(wired, monkeypatch):
+def test_analysis_puts_disease_queries_first_and_passes_metrics(wired, monkeypatch):
+    # 상한이 쿼리 수 이상이라 모든 쿼리의 1위는 순서와 관계없이 들어간다. 순서는 2위 이하에만 영향을 주므로
+    # 질환 쿼리를 앞에 둬야 특성의 2위 근거가 질환의 2·3위 근거를 밀어내지 않는다
     seen = []
     monkeypatch.setattr(svc, "retrieve", lambda queries: seen.extend(queries) or [EV])
     svc._analyze_inbody_record(None, {**USER, "fh_hypertension": True}, [TARGET], TARGET)
-    traits = [q for q in seen if q.trait]
-    assert seen[0].trait is not None and seen[:len(traits)] == traits  # 특성 쿼리가 앞에, 질환 쿼리가 뒤에
-    assert any(q.trait is None for q in seen)
+    diseases = [q for q in seen if q.trait is None]
+    assert diseases and seen[:len(diseases)] == diseases  # 질환 쿼리가 앞에, 특성 쿼리가 뒤에
+    assert any(q.trait for q in seen)
     assert "missing_metrics" in wired["generate"]["personal_metrics"]
 
 

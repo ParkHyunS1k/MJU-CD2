@@ -101,7 +101,7 @@ def _report(case: dict) -> dict:
     risks = predict_all(inbody, prof)
     metrics = compute(inbody, prof)
     traits = trait_queries(risks, prof, metrics, None)
-    queries = [*traits, *build_queries(risks, inbody, prof["gender"])]
+    queries = [*build_queries(risks, inbody, prof["gender"]), *traits]
     evidence = retrieve(queries)
     raw = generate_report(risks, prof, inbody_metrics=inbody, evidence=evidence, personal_metrics=metrics)
     content, sources = validate_citations(raw, evidence)
