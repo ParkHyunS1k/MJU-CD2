@@ -109,12 +109,12 @@ def _parts(**over):
 
 def test_lower_body_muscle_trait():
     qs = _traits({"segmental_lean": _parts(left_leg="표준이하")}, {"gender": "male"})
-    assert qs[0].trait == "부위 근육 부족" and qs[0].text == "하체 근력운동 스쿼트 런지 다리 근육"
+    assert qs[0].trait == "부위 근육 부족" and qs[0].text == "근감소증 운동요법 하체 근력운동 권고"
 
 
 def test_upper_body_only_uses_large_muscle_query():
     qs = _traits({"segmental_lean": _parts(left_arm="표준이하", right_arm="표준이하")}, {"gender": "male"})
-    assert qs[0].text == "대근육 근력운동 상체 팔 근육"
+    assert qs[0].text == "근감소증 운동요법 상체 근력운동 권고"
 
 
 def test_trunk_fat_triggers_abdominal_and_order_after_whole_body_muscle():

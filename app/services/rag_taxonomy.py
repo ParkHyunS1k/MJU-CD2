@@ -121,9 +121,9 @@ def trait_queries(disease_risks: list[dict], profile: dict, metrics: dict,
     trends = (trend_analysis or {}).get("feature_trends", [])
     segmental = metrics.get("segmental", {})
     weak_parts = segmental.get("근육 표준이하", [])
-    # 코퍼스에 상체 운동 근거가 거의 없어 팔만 부족하면 큰 근육 근력운동 근거로 받는다
-    part_query = ("하체 근력운동 스쿼트 런지 다리 근육" if any("다리" in p for p in weak_parts)
-                  else "대근육 근력운동 상체 팔 근육" if weak_parts else None)
+    # 평가한 키워드형(근감소증 운동요법) 문구라야 임계값을 넘는다. "스쿼트 런지"처럼 구체적으로 쓰면 0.66까지 떨어졌다
+    part_query = ("근감소증 운동요법 하체 근력운동 권고" if any("다리" in p for p in weak_parts)
+                  else "근감소증 운동요법 상체 근력운동 권고" if weak_parts else None)
     groups: list[list[Query]] = [
         [Query("sarcopenia", "exercise", "근육량 증가 저항운동 단백질 섭취", "근육 부족")]
         if metrics.get("muscle_status", {}).get("status") == "표준 이하" else [],
