@@ -45,6 +45,16 @@ def test_report_gets_sources_and_prompt_gets_evidence(wired, monkeypatch):
     assert wired["saved"] is report
 
 
+def test_analysis_puts_trait_queries_first_and_passes_metrics(wired, monkeypatch):
+    seen = []
+    monkeypatch.setattr(svc, "retrieve", lambda queries: seen.extend(queries) or [EV])
+    svc._analyze_inbody_record(None, {**USER, "fh_hypertension": True}, [TARGET], TARGET)
+    traits = [q for q in seen if q.trait]
+    assert seen[0].trait is not None and seen[:len(traits)] == traits  # 특성 쿼리가 앞에, 질환 쿼리가 뒤에
+    assert any(q.trait is None for q in seen)
+    assert "missing_metrics" in wired["generate"]["personal_metrics"]
+
+
 def test_retrieval_failure_is_503_and_nothing_saved(wired, monkeypatch):
     def boom(queries):
         raise RetrievalError("down")

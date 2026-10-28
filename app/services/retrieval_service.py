@@ -74,7 +74,8 @@ def select_evidence(queries: list[Query], results: list[list[dict]], limit: int 
                      publisher=row.get("publisher"), year=row.get("published_year"), url=row.get("url"),
                      heading_path=row.get("heading_path"), page_start=row.get("page_start"),
                      page_end=row.get("page_end"), content=row["content"], similarity=row["similarity"],
-                     condition=query.condition, category=query.category, chunk_category=row.get("category"))
+                     condition=query.condition, category=query.category, chunk_category=row.get("category"),
+                     trait=query.trait)
             for i, (query, row) in enumerate(picked, 1)]
 
 

@@ -105,7 +105,8 @@ def test_generate_report_falls_back_on_rate_limit_and_empty_parse(monkeypatch):
 
 def test_rules_turn_guidelines_into_personal_targets():
     rules, guide = ai_service._REPORT_SYSTEM_INSTRUCTION, ai_service._REPORT_GUIDE
-    assert "사용자 수치에 적용" in rules and "개인 목표" in rules
+    assert "personal_metrics" in rules and "직접 계산하지" in rules and "개인 목표" in rules
+    assert "감량 비율은 이 사람의 체중으로" not in rules
     assert "high인 질환마다" in guide and "SHAP 기여가 큰" in guide and "같은 S번호" in guide
 
 
@@ -115,3 +116,26 @@ def test_metrics_are_rounded_before_prompting(monkeypatch):
     prompt = responses.calls[0]["input"]
     assert '"bmi": 24.9' in prompt and "24.943" not in prompt
     assert '"abs_fat": 0.93' in prompt  # 0.90 기준과 비교하는 값이라 두 자리를 남긴다
+
+
+def test_rules_for_missing_metrics_device_criteria_and_weight_targets():
+    rules = ai_service._REPORT_SYSTEM_INSTRUCTION
+    assert "missing_metrics" in rules and "인바디 기준" in rules
+    assert "weight_loss_5pct_kg" in rules and "정상 BMI까지" in rules
+    assert "mg" not in rules
+
+
+def test_payload_has_personal_metrics(monkeypatch):
+    responses = _fake_openai(monkeypatch, [_report()])
+    ai_service.generate_report([], {}, evidence=[], personal_metrics={"bmi_band": "정상"})
+    assert '"personal_metrics": {"bmi_band": "정상"}' in responses.calls[0]["input"]
+
+
+def test_trait_header():
+    ev = Evidence(**{**_ev("S1").__dict__, "trait": "가족력", "category": "lifestyle"})
+    assert ai_service.format_evidence([ev]).startswith("[S1] (가족력·생활습관) ")
+
+
+def test_metric_keys_match_personal_metrics_names():
+    from app.services.personal_metrics import METRIC_NAMES
+    assert list(ai_service._INBODY_METRIC_KEYS) == list(METRIC_NAMES)

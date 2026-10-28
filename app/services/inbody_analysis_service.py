@@ -4,8 +4,9 @@ from app.core.supabase import get_supabase_admin
 from app.schemas.inbody import HealthReport
 from app.services.ai_service import generate_report
 from app.services.citation_service import validate_citations
+from app.services.personal_metrics import compute as compute_personal_metrics
 from app.services.prediction_service import predict_all
-from app.services.rag_taxonomy import build_queries
+from app.services.rag_taxonomy import build_queries, trait_queries
 from app.services.retrieval_service import RetrievalError, retrieve
 from app.services.storage_service import delete_inbody_file
 from app.services.trend_service import compute_trends, is_eligible
@@ -75,7 +76,10 @@ def _analyze_inbody_record(
 
     trend_analysis = _build_trend_analysis(records, disease_risks)
 
-    queries = build_queries(disease_risks, target, user.get("gender"))
+    metrics = compute_personal_metrics(target, user)
+    # 특성 쿼리를 앞에 둬야 쿼리마다 1위부터 모을 때 특성 근거가 먼저 들어간다
+    queries = [*trait_queries(disease_risks, user, metrics, trend_analysis),
+               *build_queries(disease_risks, target, user.get("gender"))]
     try:
         evidence = retrieve(queries)
     except RetrievalError as e:
@@ -92,6 +96,7 @@ def _analyze_inbody_record(
             inbody_metrics=target,
             evidence=evidence,
             previous_report=_previous_report_summary(records, target),
+            personal_metrics=metrics,
         )
     except ValueError as e:
         raise AnalysisServiceError(502, str(e)) from e
