@@ -73,3 +73,21 @@ def test_hanging_rpc_times_out_quickly():
 
 def test_vector_literal_format():
     assert rs._vector_literal([0.5, -0.25]) == "[0.500000,-0.250000]"
+
+
+def test_select_evidence_keeps_chunk_category_and_missing_is_none():
+    ev = rs.select_evidence([Q1, Q2], [[{**_row(1, .9), "category": "supplement"}], [_row(2, .9)]])
+    assert ev[0].chunk_category == "supplement" and ev[1].chunk_category is None
+    assert ev[0].trait is None
+
+
+def test_retrieve_gives_every_query_its_top_hit():
+    queries = [Q1] * 21
+    ev = rs.retrieve(queries, embed_fn=lambda texts, kind: [[float(i)] for i in range(len(texts))],
+                     match_fn=lambda v: [_row(int(v[0]) + 1, .9), _row(int(v[0]) + 100, .8)])
+    assert {e.chunk_id for e in ev} >= set(range(1, 22))
+
+
+def test_empty_trait_results_do_not_shift_others():
+    ev = rs.select_evidence([Q1, Q2, Q1], [[], [_row(5, .9)], [_row(6, .9)]])
+    assert [(e.sid, e.chunk_id) for e in ev] == [("S1", 5), ("S2", 6)]

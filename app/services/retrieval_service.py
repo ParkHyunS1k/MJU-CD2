@@ -37,7 +37,9 @@ class Evidence:
     content: str
     similarity: float
     condition: str
-    category: str
+    category: str  # 이 청크를 찾은 쿼리의 분야(근거 머리글용)
+    chunk_category: str | None = None  # 청크 자신의 분야. 영양제 인용은 이것으로 거른다. 옛 RPC면 None
+    trait: str | None = None  # 특성 쿼리로 찾았으면 그 특성 이름
 
 
 def _vector_literal(vector: list[float]) -> str:
@@ -72,7 +74,7 @@ def select_evidence(queries: list[Query], results: list[list[dict]], limit: int 
                      publisher=row.get("publisher"), year=row.get("published_year"), url=row.get("url"),
                      heading_path=row.get("heading_path"), page_start=row.get("page_start"),
                      page_end=row.get("page_end"), content=row["content"], similarity=row["similarity"],
-                     condition=query.condition, category=query.category)
+                     condition=query.condition, category=query.category, chunk_category=row.get("category"))
             for i, (query, row) in enumerate(picked, 1)]
 
 
@@ -99,4 +101,5 @@ def retrieve(queries: list[Query], embed_fn: Callable = embed, match_fn: Callabl
         # ponytail: 시간을 넘긴 스레드는 끝날 때까지 남는다. 요청은 바로 돌려주고, 스레드 누수가 문제 되면 httpx 타임아웃을 건다
         outer.shutdown(wait=False, cancel_futures=True)
         pool.shutdown(wait=False, cancel_futures=True)
-    return select_evidence(queries, results)
+    # 특성 쿼리를 더해도 질환 쿼리마다 1위 근거는 들어가도록 상한을 쿼리 수 이상으로 둔다
+    return select_evidence(queries, results, limit=max(MAX_EVIDENCE, len(queries)))

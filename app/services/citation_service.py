@@ -31,8 +31,9 @@ def validate_citations(content: dict, evidence: list[Evidence]) -> tuple[dict, l
     valid = {e.sid for e in evidence}
     for item in _cited_items(content):
         item["source_ids"] = _clean(item.get("source_ids", []), valid)
-    # 영양제는 영양제(supplement) 문서를 인용할 때만 남긴다. 식사요법 문단의 식품 언급은 보충제 근거가 아니다
-    supplement_sids = {e.sid for e in evidence if e.category == "supplement"}
+    # 영양제는 영양제(supplement) 문단을 인용할 때만 남긴다. 식사요법 문단의 식품 언급은 보충제 근거가 아니다.
+    # 쿼리 분야가 아니라 청크 자신의 분야로 본다(영양제 쿼리도 식사 문단을 찾아올 수 있다)
+    supplement_sids = {e.sid for e in evidence if e.chunk_category == "supplement"}
     for s in content["supplement_candidates"]:
         s["source_ids"] = [sid for sid in s["source_ids"] if sid in supplement_sids]
     content["supplement_candidates"] = [s for s in content["supplement_candidates"] if s["source_ids"]]

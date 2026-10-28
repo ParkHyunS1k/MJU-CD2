@@ -33,9 +33,19 @@ def test_unknown_duplicate_and_messy_ids_are_cleaned():
 
 
 def test_supplement_without_valid_citation_is_dropped():
-    s2 = Evidence(**{**_ev("S2").__dict__, "category": "supplement"})
+    s2 = Evidence(**{**_ev("S2").__dict__, "chunk_category": "supplement"})
     content, _ = validate_citations(_content(), [_ev("S1"), s2])
     assert [s["name"] for s in content["supplement_candidates"]] == ["홍국"]
+
+
+def test_supplement_needs_supplement_chunk_not_supplement_query():
+    # 영양제 쿼리가 찾아온 식사 문단은 영양제 근거가 아니다
+    by_query = Evidence(**{**_ev("S2").__dict__, "category": "supplement", "chunk_category": "diet"})
+    content, _ = validate_citations(_content(), [_ev("S1"), by_query])
+    assert content["supplement_candidates"] == []
+    unknown = Evidence(**{**_ev("S2").__dict__, "category": "supplement", "chunk_category": None})
+    content, _ = validate_citations(_content(), [_ev("S1"), unknown])
+    assert content["supplement_candidates"] == []
 
 
 def test_items_without_citations_are_kept():
@@ -64,8 +74,9 @@ def test_old_report_without_new_fields_still_parses():
 
 
 def test_supplement_citing_only_diet_or_lifestyle_evidence_is_dropped():
-    diet = _ev("S1")  # category="diet": 식사요법 문단이 생선·마그네슘 식품을 말해도 영양제 근거는 아니다
-    supplement = Evidence(**{**diet.__dict__, "sid": "S2", "chunk_id": 2, "category": "supplement"})
+    # 식사요법 문단이 생선·마그네슘 식품을 말해도 영양제 근거는 아니다
+    diet = Evidence(**{**_ev("S1").__dict__, "chunk_category": "diet"})
+    supplement = Evidence(**{**diet.__dict__, "sid": "S2", "chunk_id": 2, "chunk_category": "supplement"})
     content = _content(supplement_candidates=[
         {"name": "오메가3", "purpose": "p", "related_metrics": [], "evidence_level": "limited", "why_consider": "w",
          "cautions": [], "not_recommended_if": [], "source_ids": ["S1"]},
