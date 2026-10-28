@@ -12,6 +12,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from itertools import combinations
 from pathlib import Path
 
@@ -116,12 +117,17 @@ def run(out: Path, inbody_json: Path | None) -> None:
 
     load_dotenv(".env")
     cases = _cases() + (json.loads(inbody_json.read_text(encoding="utf-8")) if inbody_json else [])
-    results = []
-    for case in cases:
-        results.append(_report(case))
-        print(f"{case['case']}: 쿼리 {len(results[-1]['queries'])}, 출처 {len(results[-1]['sources'])}")
+    results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else []  # 중간에 끊겨도 이어서 한다
+    done = {r["case"] for r in results}
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(results, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    for case in cases:
+        if case["case"] in done:
+            continue
+        if results:
+            time.sleep(15)  # Gemini 임베딩 무료 등급 분당 100건. 리포트 1건에 쿼리 약 20개
+        results.append(_report(case))
+        out.write_text(json.dumps(results, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        print(f"{case['case']}: 쿼리 {len(results[-1]['queries'])}, 출처 {len(results[-1]['sources'])}")
 
 
 def _cited(r: dict) -> set:
