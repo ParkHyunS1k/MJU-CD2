@@ -235,3 +235,18 @@ def test_load_skips_unfinished_entries(tmp_path):
     (tmp_path / "state.json").write_text(json.dumps({"A|rag": done, "B|plain": {"case": "B", "version": "plain"}},
                                                     ensure_ascii=False))
     assert [e["case"] for e in g._load(tmp_path)] == ["A"]
+
+
+def test_judge_prompt_lets_any_supporting_passage_win():
+    prompt = g.judge_prompt([{"id": "c1", "text": "x", "passages": [{"pid": "p1", "content": "y"}]}])
+    assert "하나라도" in prompt and "contradicted는 뒷받침하는 문단이 없을 때만" in prompt
+
+
+def test_evaluate_rejudges_from_stored_passages_without_search():
+    claims, verdicts, search, searched = _fakes()
+    entry = {"case": "A", "version": "plain", "report": _REPORT, "evidence": [],
+             "claims": [{"id": "c1", "field_id": "plan[0].actions[0]", "text": "주 150분 운동", "kind": "medical"}],
+             "passages": {"c1": [{"pid": "p1", "chunk_id": 9, "title": "운동", "heading_path": "권고",
+                                  "content": "주 150분"}]}}
+    g.evaluate(entry, claims, verdicts, search)
+    assert searched == [] and entry["corpus"]["c1"]["verdict"] == "supported"
