@@ -47,6 +47,24 @@ AI 리포트가 진료지침·공공 건강정보를 근거로 쓰도록, 문서
 3. 쿼리별 1위부터 돌아가며 최대 15개를 골라 `[S1]…` 근거로 프롬프트에 넣습니다.
 4. 리포트가 인용한 S번호를 검증하고, 출처(문서·장·쪽)를 붙입니다.
 
+## 리포트 근거 정확도 (RAG vs 단순 프롬프트)
+
+같은 10명(KNHANES 5, 합성 부위 5)에 대해 같은 모델(gpt-6.1-terra)로 RAG 리포트와 단순 프롬프트(지금 프롬프트에서 근거·인용 규칙만 뺀 것) 리포트를 만들었습니다. 리포트를 의학 주장 단위로 나누고, 주장마다 코퍼스 상위 5개 문단을 검색해 GPT가 뒷받침 여부를 판정했습니다(`rag/eval/grounding.py`, 설계 `docs/superpowers/specs/2026-10-29-grounding-eval-design.md`).
+
+| 지표 | 단순 프롬프트 | RAG |
+|---|---|---|
+| 근거 인용률 | 0% (0/72) | 94% (146/155) |
+| 근거 없는 주장 비율 | 29% (31/107) | 15% (27/186) |
+| 인용 정확도 | - | 98% (143/146) |
+
+- 판정기 검증: 무작위 20건을 Claude가 판정을 모른 채 다시 판정해 17건 일치(뒷받침 여부만 보면 18건).
+- 한계: RAG 주장은 코퍼스 문장을 옮겨 써 검색에서 더 잘 찾힐 수 있습니다. 주장 추출은 앞 6명은 Codex, 나머지는 API로 했고 판정은 모두 API입니다.
+
+```bash
+PYTHONPATH=. python -m rag.eval.grounding run        # 리포트 생성·판정 (끊겨도 이어서)
+PYTHONPATH=. python -m rag.eval.grounding summarize  # rag/eval/preview/grounding/summary.md
+```
+
 ## 실행
 
 저장소 루트에서 실행합니다. 키는 루트 `.env`에 둡니다(`GEMINI_API_KEY`, `KDCA_API_TOKEN`, Supabase 키).
