@@ -146,3 +146,89 @@ def apply_verdicts(claims: list[dict], verdicts: Verdicts, passages: dict[str, l
 
 def _dump(path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+
+
+def _rate(n: int, d: int) -> float | None:
+    return n / d if d else None
+
+
+def metrics(entries: list[dict]) -> dict:
+    """한 버전의 항목들을 합친 지표. 판정이 빠진(missing) 주장은 비율에서 뺀다."""
+    m = dict.fromkeys(("medical", "citable", "cited", "judged", "unsupported", "contradicted", "missing",
+                       "cite_judged", "cite_supported"), 0)
+    for e in entries:
+        sources = item_sources(e["report"])
+        for c in (c for c in e["claims"] if c["kind"] == "medical"):
+            m["medical"] += 1
+            item = item_of(c["field_id"])
+            if item.split("[")[0] in CITABLE:
+                m["citable"] += 1
+                m["cited"] += bool(sources.get(item))
+            verdict = e["corpus"].get(c["id"], {}).get("verdict", "missing")
+            if verdict == "missing":
+                m["missing"] += 1
+            else:
+                m["judged"] += 1
+                m["unsupported"] += verdict != "supported"
+                m["contradicted"] += verdict == "contradicted"
+            cited = e.get("cited", {}).get(c["id"])
+            if cited and cited["verdict"] != "missing":
+                m["cite_judged"] += 1
+                m["cite_supported"] += cited["verdict"] == "supported"
+    return {**m, "citation_rate": _rate(m["cited"], m["citable"]),
+            "unsupported_rate": _rate(m["unsupported"], m["judged"]),
+            "cite_accuracy": _rate(m["cite_supported"], m["cite_judged"])}
+
+
+def examples(entries: list[dict], n: int = 3) -> list[tuple[dict, dict]]:
+    """같은 사람의 (단순 프롬프트의 근거 없는 주장, RAG의 인용·뒷받침된 주장) 쌍. 사람마다 한 쌍."""
+    by = {(e["case"], e["version"]): e for e in entries}
+    pairs = []
+    for case in dict.fromkeys(e["case"] for e in entries):
+        plain, rag = by.get((case, "plain")), by.get((case, "rag"))
+        if not plain or not rag:
+            continue
+        bad = next((c for c in plain["claims"] if c["kind"] == "medical"
+                    and plain["corpus"].get(c["id"], {}).get("verdict") in ("not_found", "contradicted")), None)
+        good = next((c for c in rag["claims"] if c["kind"] == "medical"
+                     and rag.get("cited", {}).get(c["id"], {}).get("verdict") == "supported"), None)
+        if bad and good:
+            pairs.append((bad, good))
+        if len(pairs) == n:
+            break
+    return pairs
+
+
+def _pct(x: float | None) -> str:
+    return "-" if x is None else f"{x:.0%}"
+
+
+def render_summary(entries: list[dict], spotcheck: dict | None = None) -> str:
+    names = {"plain": "단순 프롬프트", "rag": "RAG"}
+    total = {v: metrics([e for e in entries if e["version"] == v]) for v in names}
+    rows = ["| 지표 | 단순 프롬프트 | RAG |", "|---|---|---|",
+            "| 의학 주장 수 | {} | {} |".format(total["plain"]["medical"], total["rag"]["medical"])]
+    for label, rate, num, den in (("근거 인용률", "citation_rate", "cited", "citable"),
+                                  ("근거 없는 주장 비율", "unsupported_rate", "unsupported", "judged"),
+                                  ("　그중 근거와 어긋남", None, "contradicted", "judged"),
+                                  ("인용 정확도", "cite_accuracy", "cite_supported", "cite_judged")):
+        cells = []
+        for v in names:
+            m = total[v]
+            r = m[rate] if rate else _rate(m[num], m[den])
+            cells.append(f"{_pct(r)} ({m[num]}/{m[den]})")
+        rows.append(f"| {label} | {' | '.join(cells)} |")
+    missing = sum(total[v]["missing"] for v in names)
+    out = ["# 리포트 근거 정확도: 단순 프롬프트 vs RAG", "", *rows, "",
+           f"판정 누락 {missing}건은 비율에서 뺐다. 단순 프롬프트는 인용할 근거가 없어 인용률이 구조상 0%다."]
+    if spotcheck:
+        out.append(f"판정기 검증: 무작위 {spotcheck['total']}건 중 {spotcheck['agree']}건 일치(Claude 재판정).")
+    out += ["", "## 사람별", "", "| 사람 | 버전 | 의학 주장 | 인용률 | 근거 없음 |", "|---|---|---|---|---|"]
+    for e in entries:
+        m = metrics([e])
+        out.append(f"| {e['case']} | {names[e['version']]} | {m['medical']} | {_pct(m['citation_rate'])} | "
+                   f"{_pct(m['unsupported_rate'])} |")
+    out += ["", "## 예시", ""]
+    for bad, good in examples(entries):
+        out += [f"- 단순 프롬프트(근거 없음): {bad['text']}", f"  RAG(인용·뒷받침): {good['text']}"]
+    return "\n".join(out) + "\n"

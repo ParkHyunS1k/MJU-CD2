@@ -64,3 +64,52 @@ def test_codex_schemas_are_strict():
     for model in (g.Claims, g.Verdicts):
         schema = g.schema_of(model)
         assert "additionalProperties" in str(schema) and "$ref" not in str(schema)
+
+
+def _entry(version, claims, corpus, cited=None, report=_REPORT):
+    return {"case": "A", "version": version, "report": report, "evidence": [],
+            "claims": [{"id": cid, "field_id": fid, "text": cid, "kind": kind} for cid, fid, kind in claims],
+            "corpus": {cid: {"verdict": v, "passage_ids": [], "passages": []} for cid, v in corpus.items()},
+            "cited": {cid: {"verdict": v, "passage_ids": []} for cid, v in (cited or {}).items()}}
+
+
+_PLAIN_REPORT = {**_REPORT, "risk_report": [{**_REPORT["risk_report"][0], "source_ids": []}],
+                 "lifestyle_plan": [{**_REPORT["lifestyle_plan"][0], "source_ids": []}]}
+
+
+def test_metrics_counts_and_rates():
+    plain = _entry("plain", [("c1", "plan[0].actions[0]", "medical"), ("c2", "plan[0].actions[1]", "medical"),
+                             ("c3", "risk[0].message", "medical"), ("c4", "plan[0].reason", "user_data")],
+                   {"c1": "not_found", "c2": "not_found", "c3": "supported"}, report=_PLAIN_REPORT)
+    m = g.metrics([plain])
+    assert m["medical"] == 3 and m["citation_rate"] == 0.0 and m["unsupported_rate"] == 2 / 3
+    assert m["cite_accuracy"] is None
+
+    rag = _entry("rag", [("c1", "plan[0].actions[0]", "medical"), ("c2", "plan[0].actions[1]", "medical"),
+                         ("c3", "plan[0].reason", "medical"), ("c4", "summary.overall_message", "medical")],
+                 {"c1": "supported", "c2": "supported", "c3": "supported", "c4": "contradicted"},
+                 {"c1": "supported", "c2": "supported", "c3": "not_found"})
+    m = g.metrics([rag])
+    assert (m["citable"], m["cited"], m["citation_rate"]) == (3, 3, 1.0)
+    assert (m["unsupported"], m["contradicted"], m["unsupported_rate"]) == (1, 1, 0.25)
+    assert (m["cite_judged"], m["cite_supported"], m["cite_accuracy"]) == (3, 2, 2 / 3)
+
+
+def test_metrics_no_medical_claims_gives_none():
+    m = g.metrics([_entry("plain", [("c1", "plan[0].reason", "user_data")], {})])
+    assert m["medical"] == 0 and m["citation_rate"] is None and m["unsupported_rate"] is None
+
+
+def test_metrics_excludes_missing_from_rate():
+    e = _entry("plain", [("c1", "risk[0].message", "medical"), ("c2", "plan[0].reason", "medical")],
+               {"c1": "not_found", "c2": "missing"}, report=_PLAIN_REPORT)
+    m = g.metrics([e])
+    assert (m["judged"], m["missing"], m["unsupported_rate"]) == (1, 1, 1.0)
+
+
+def test_render_summary_has_both_versions_and_examples():
+    plain = _entry("plain", [("c1", "plan[0].actions[0]", "medical")], {"c1": "not_found"}, report=_PLAIN_REPORT)
+    rag = _entry("rag", [("c1", "plan[0].actions[0]", "medical")], {"c1": "supported"}, {"c1": "supported"})
+    assert g.examples([plain, rag]) == [(plain["claims"][0], rag["claims"][0])]
+    md = g.render_summary([plain, rag])
+    assert "단순 프롬프트" in md and "RAG" in md and "근거 없는 주장 비율" in md
