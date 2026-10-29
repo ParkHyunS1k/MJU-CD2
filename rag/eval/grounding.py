@@ -14,10 +14,24 @@ from pydantic import BaseModel, ConfigDict
 BANNED = ("근거", "S번호", "source_ids", "직전 리포트")
 # 인용 칸(source_ids)이 있는 항목. 인용률 분모는 이 항목들의 의학 주장이다
 CITABLE = ("watch_points", "risk", "plan", "supp")
+# 근거·인용 규칙과 RAG가 아닌 규칙이 한 문장에 섞인 것. RAG 부분만 덜어내고 나머지 규칙은 기준 버전에도 남긴다
+PLAIN_REWRITES = (
+    ("근거의 일반 권고는", "일반 권고는"),
+    ("체중 감량 권고를 [근거]에서 인용한 항목에서만 쓰고, 그런 근거가 없으면", "체중 감량을 권하는 항목에서만 쓰고, 그렇지 않으면"),
+    ("인바디 해석에 쓰고, 부위별 운동은 [근거]에 나온 운동만 권하세요.", "인바디 해석에 쓰세요."),
+    ("근거가 부족하면 항목 수를 줄이고", "항목 수를 줄이더라도"),
+    ("영양제는 [근거]에 등장하는 원료만, 치료나", "영양제는 치료나"),
+    ("제안하고 없으면 supplement_candidates를 빈 배열로 두세요.", "제안하세요."),
+    ("요인부터 순서대로 쓰고, 같은 S번호를 여러 항목에 반복하지 마세요.", "요인부터 순서대로 쓰세요."),
+    ("[근거]에 나오는 원료만 최대 3개.", "최대 3개."),
+    ("개인화 근거가 약하면", "개인화 단서가 약하면"),
+)
 
 
 def plain_text(text: str) -> str:
     """BANNED가 든 문장을 뺀다. 괄호 속 덧붙임만 걸리면 괄호만 지우고, 지침의 '- 섹션:' 머리는 남긴다."""
+    for old, new in PLAIN_REWRITES:
+        text = text.replace(old, new)
     banned = "|".join(map(re.escape, BANNED))
     lines = []
     for line in text.split("\n"):
@@ -180,6 +194,11 @@ def metrics(entries: list[dict]) -> dict:
             "cite_accuracy": _rate(m["cite_supported"], m["cite_judged"])}
 
 
+def without_supplements(entries: list[dict]) -> list[dict]:
+    """영양제 주장을 뺀 항목. 기준 버전은 영양제를 거르는 후처리가 없어 비율을 따로 본다."""
+    return [{**e, "claims": [c for c in e["claims"] if not c["field_id"].startswith("supp[")]} for e in entries]
+
+
 def examples(entries: list[dict], n: int = 3) -> list[tuple[dict, dict]]:
     """같은 사람의 (단순 프롬프트의 근거 없는 주장, RAG의 인용·뒷받침된 주장) 쌍. 사람마다 한 쌍."""
     by = {(e["case"], e["version"]): e for e in entries}
@@ -218,6 +237,11 @@ def render_summary(entries: list[dict], spotcheck: dict | None = None) -> str:
             r = m[rate] if rate else _rate(m[num], m[den])
             cells.append(f"{_pct(r)} ({m[num]}/{m[den]})")
         rows.append(f"| {label} | {' | '.join(cells)} |")
+    no_supp = {v: metrics(without_supplements([e for e in entries if e["version"] == v])) for v in names}
+    rows += ["| 영양제 의학 주장 수 | {} | {} |".format(*(total[v]["medical"] - no_supp[v]["medical"] for v in names)),
+             "| 근거 없는 주장 비율(영양제 제외) | {} |".format(" | ".join(
+                 f"{_pct(no_supp[v]['unsupported_rate'])} ({no_supp[v]['unsupported']}/{no_supp[v]['judged']})"
+                 for v in names))]
     missing = sum(total[v]["missing"] for v in names)
     out = ["# 리포트 근거 정확도: 단순 프롬프트 vs RAG", "", *rows, "",
            f"판정 누락 {missing}건은 비율에서 뺐다. 단순 프롬프트는 인용할 근거가 없어 인용률이 구조상 0%다."]
@@ -237,6 +261,7 @@ def render_summary(entries: list[dict], spotcheck: dict | None = None) -> str:
 # ── 실행 ─────────────────────────────────────────────────────────────
 
 TOP_K = 5  # 주장마다 코퍼스 판정 후보 수. 두 버전이 같은 조건이다
+REPORT_MODEL = "gpt-6.1-terra"  # 두 버전 같은 모델. 앱의 대체 모델로 조용히 바뀌지 않게 고정한다
 VERSIONS = ("plain", "rag")
 
 
@@ -248,6 +273,15 @@ def plain_prompts() -> tuple[str, str]:
 
 def generate(case: dict, version: str) -> tuple[dict, list[dict]]:
     """report_preview._report와 같은 순서. plain은 앱 코드를 바꾸지 않고 프롬프트만 바꿔 끼운다."""
+    from unittest.mock import patch
+
+    from app.services import ai_service
+
+    with patch.object(ai_service, "REPORT_MODELS", (REPORT_MODEL,)):
+        return _generate(case, version)
+
+
+def _generate(case: dict, version: str) -> tuple[dict, list[dict]]:
     from unittest.mock import patch
 
     from app.services import ai_service
@@ -379,17 +413,20 @@ def summarize(out_dir) -> None:
 
 
 def spotcheck(out_dir, n: int = 20, seed: int = 0) -> None:
-    """코퍼스 판정 n개를 무작위로 뽑아 재판정용 문서로 쓴다. 버전은 숨긴다."""
+    """코퍼스 판정 n개를 무작위로 뽑아 재판정용 문서로 쓴다. 버전과 Codex 판정은 숨긴다."""
     import random
 
     picks = [(e, c) for e in _load(out_dir) for c in e["claims"]
              if c["kind"] == "medical" and e["corpus"].get(c["id"], {}).get("verdict", "missing") != "missing"]
-    lines = []
+    lines, key = [], []
     for i, (e, c) in enumerate(random.Random(seed).sample(picks, min(n, len(picks))), 1):
         v = e["corpus"][c["id"]]
-        lines += [f"## {i}. {c['text']}", f"판정: {v['verdict']} {v['passage_ids']}", ""]
+        lines += [f"## {i}. {c['text']}", ""]
         lines += [f"- ({p['pid']}) {p['title']} › {p['heading_path']}: {p['content']}" for p in v["passages"]] + [""]
+        key.append({"n": i, "key": f"{e['case']}|{e['version']}", "claim_id": c["id"], "verdict": v["verdict"]})
+    # 재판정이 Codex 판정에 끌려가지 않게 판정은 따로 둔다
     (out_dir / "spotcheck.md").write_text("\n".join(lines), encoding="utf-8")
+    _dump(out_dir / "spotcheck_key.json", key)
 
 
 def main() -> None:

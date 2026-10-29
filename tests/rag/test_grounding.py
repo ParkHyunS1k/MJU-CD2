@@ -178,3 +178,51 @@ def test_generate_plain_prompt_has_no_evidence_block(monkeypatch):
     assert not any(word in text for word in ("[근거]", "S번호", "source_ids")) and "[사용자 데이터]" in text
     assert evidence == [] and report["lifestyle_plan"][0]["source_ids"] == [] and report["risk_report"][0]["source_ids"] == []
     assert ai_service._REPORT_GUIDE in ai_service.build_report_prompt({}, [], None)  # 패치가 끝나면 원래대로
+
+
+def test_plain_rewrites_keep_non_rag_rules():
+    for old, _ in g.PLAIN_REWRITES:  # 앱 프롬프트가 바뀌면 여기서 알 수 있다
+        assert old in ai_service._REPORT_SYSTEM_INSTRUCTION + ai_service._REPORT_GUIDE
+    system, guide = g.plain_prompts()
+    plain = system + guide
+    assert not any(word in plain for word in g.BANNED)
+    for rule in ("일반 권고는 이 사람의 현재 상태", "kg_to_normal_bmi", "personal_metrics.segmental",
+                 "일반론으로 채우지 마세요", "SHAP 기여가 큰 요인부터", "보수적인 보충제 후보",
+                 "supplement_candidates: 최대 3개", "해당 섹션을 일반 조언으로 채우지"):
+        assert rule in plain, rule
+
+
+def test_render_summary_reports_supplement_claims_separately():
+    plain = _entry("plain", [("c1", "risk[0].message", "medical"), ("c2", "supp[0].purpose", "medical")],
+                   {"c1": "supported", "c2": "not_found"}, report=_PLAIN_REPORT)
+    md = g.render_summary([plain])
+    assert "영양제 의학 주장" in md and "영양제 제외" in md
+    assert g.metrics(g.without_supplements([plain]))["unsupported_rate"] == 0.0
+
+
+def test_generate_pins_the_report_model(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.schemas.inbody import AIReportContent
+
+    seen = []
+
+    def parse(**kwargs):
+        seen.append(ai_service.REPORT_MODELS)
+        return SimpleNamespace(output_parsed=AIReportContent.model_validate(_REPORT))
+
+    monkeypatch.setattr(ai_service, "get_openai", lambda: SimpleNamespace(responses=SimpleNamespace(parse=parse)))
+    monkeypatch.setattr("app.services.prediction_service.predict_all", lambda inbody, profile: [])
+    g.generate({"case": "A", "profile": {"gender": "male", "birth_year": 1995}, "inbody": {"bmi": 22.0}}, "plain")
+    assert seen == [(g.REPORT_MODEL,)]
+
+
+def test_spotcheck_hides_verdicts(tmp_path):
+    import json
+
+    e = _entry("rag", [("c1", "plan[0].actions[0]", "medical")], {"c1": "contradicted"})
+    (tmp_path / "state.json").write_text(json.dumps({"A|rag": e}, ensure_ascii=False))
+    g.spotcheck(tmp_path)
+    assert "contradicted" not in (tmp_path / "spotcheck.md").read_text()
+    assert json.loads((tmp_path / "spotcheck_key.json").read_text()) == [
+        {"n": 1, "key": "A|rag", "claim_id": "c1", "verdict": "contradicted"}]
