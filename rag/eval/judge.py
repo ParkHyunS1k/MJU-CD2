@@ -90,21 +90,23 @@ _CODEX_SCHEMA = {
 }
 
 
-def codex_ask(run=subprocess.run) -> Callable[[str], QueryJudgment]:
-    """ChatGPT 로그인된 Codex CLI로 판정한다(Gemini 무료 한도 대안). 읽기 전용 샌드박스, 세션 저장 안 함."""
+def codex_ask(run=subprocess.run, model: type[BaseModel] = QueryJudgment,
+              schema: dict = _CODEX_SCHEMA) -> Callable[[str], BaseModel]:
+    """ChatGPT 로그인된 Codex CLI로 판정한다(Gemini 무료 한도 대안). 읽기 전용 샌드박스, 세션 저장 안 함.
+    model·schema를 바꾸면 다른 판정(예: 리포트 근거 평가)에도 쓴다."""
 
-    def ask(prompt: str) -> QueryJudgment:
+    def ask(prompt: str) -> BaseModel:
         with tempfile.TemporaryDirectory() as tmp:
-            schema, out = Path(tmp) / "schema.json", Path(tmp) / "out.json"
-            schema.write_text(json.dumps(_CODEX_SCHEMA))
+            schema_path, out = Path(tmp) / "schema.json", Path(tmp) / "out.json"
+            schema_path.write_text(json.dumps(schema))
             cmd = ["codex", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral",
-                   "-C", tmp, "--output-schema", str(schema), "-o", str(out), "-"]
+                   "-C", tmp, "--output-schema", str(schema_path), "-o", str(out), "-"]
             try:
                 run(cmd, input=prompt, text=True, capture_output=True, timeout=900, check=True)
             except subprocess.CalledProcessError as e:
                 # 사용 한도 등 원인은 Codex의 ERROR 줄에만 있다
                 errors = [line for line in f"{e.stdout or ''}\n{e.stderr or ''}".splitlines() if "ERROR" in line]
                 raise RuntimeError(f"codex exec failed: {' | '.join(errors) or (e.stderr or '')[-500:]}") from e
-            return QueryJudgment.model_validate_json(out.read_text())
+            return model.model_validate_json(out.read_text())
 
     return ask

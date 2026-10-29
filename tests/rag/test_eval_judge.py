@@ -97,3 +97,26 @@ def test_codex_ask_failure_carries_codex_error_message():
 
     with pytest.raises(RuntimeError, match="usage limit"):
         codex_ask(run=failing_run)("판정 프롬프트")
+
+
+def test_codex_ask_uses_given_schema_and_model():
+    import json
+    from pathlib import Path
+
+    from pydantic import BaseModel
+
+    from rag.eval.judge import codex_ask
+
+    class _X(BaseModel):
+        x: int
+
+    given = {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"],
+             "additionalProperties": False}
+    seen = {}
+
+    def fake_run(cmd, input, text, capture_output, timeout, check):
+        seen["schema"] = json.loads(Path(cmd[cmd.index("--output-schema") + 1]).read_text())
+        Path(cmd[cmd.index("-o") + 1]).write_text(json.dumps({"x": 1}))
+
+    assert codex_ask(run=fake_run, model=_X, schema=given)("p") == _X(x=1)
+    assert seen["schema"] == given
