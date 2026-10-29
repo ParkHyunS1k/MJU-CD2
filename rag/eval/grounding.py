@@ -402,7 +402,8 @@ def run(out_dir, pause: float = 15.0) -> None:
 
 
 def _load(out_dir) -> list[dict]:
-    return list(json.loads((out_dir / "state.json").read_text(encoding="utf-8")).values())
+    """판정까지 끝난 항목만. run이 중간에 끊겨도 요약·검증을 할 수 있다."""
+    return [e for e in json.loads((out_dir / "state.json").read_text(encoding="utf-8")).values() if "cited" in e]
 
 
 def summarize(out_dir) -> None:

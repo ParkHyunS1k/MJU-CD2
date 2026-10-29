@@ -226,3 +226,12 @@ def test_spotcheck_hides_verdicts(tmp_path):
     assert "contradicted" not in (tmp_path / "spotcheck.md").read_text()
     assert json.loads((tmp_path / "spotcheck_key.json").read_text()) == [
         {"n": 1, "key": "A|rag", "claim_id": "c1", "verdict": "contradicted"}]
+
+
+def test_load_skips_unfinished_entries(tmp_path):
+    import json
+
+    done = _entry("rag", [("c1", "plan[0].actions[0]", "medical")], {"c1": "supported"})
+    (tmp_path / "state.json").write_text(json.dumps({"A|rag": done, "B|plain": {"case": "B", "version": "plain"}},
+                                                    ensure_ascii=False))
+    assert [e["case"] for e in g._load(tmp_path)] == ["A"]
