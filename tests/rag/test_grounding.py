@@ -250,3 +250,17 @@ def test_evaluate_rejudges_from_stored_passages_without_search():
                                   "content": "주 150분"}]}}
     g.evaluate(entry, claims, verdicts, search)
     assert searched == [] and entry["corpus"]["c1"]["verdict"] == "supported"
+
+
+def test_api_ask_parses_with_judge_model(monkeypatch):
+    from types import SimpleNamespace
+
+    seen = {}
+
+    def parse(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(output_parsed=g.Verdicts(verdicts=[]))
+
+    monkeypatch.setattr(ai_service, "get_openai", lambda: SimpleNamespace(responses=SimpleNamespace(parse=parse)))
+    assert g.api_ask(g.Verdicts)("판정") == g.Verdicts(verdicts=[])
+    assert (seen["model"], seen["input"], seen["text_format"]) == (g.JUDGE_MODEL, "판정", g.Verdicts)

@@ -264,6 +264,22 @@ def render_summary(entries: list[dict], spotcheck: dict | None = None) -> str:
 
 TOP_K = 5  # 주장마다 코퍼스 판정 후보 수. 두 버전이 같은 조건이다
 REPORT_MODEL = "gpt-6.1-terra"  # 두 버전 같은 모델. 앱의 대체 모델로 조용히 바뀌지 않게 고정한다
+JUDGE_MODEL = "gpt-6.1-terra"
+JUDGE_REASONING = {"effort": "medium"}  # 판정은 문단을 꼼꼼히 대조해야 해서 리포트 생성(low)보다 높인다
+
+
+def api_ask(model: type[BaseModel]):
+    """OpenAI API로 판정한다(Codex CLI 사용 한도 대안). 키는 .env의 OPENAI_API_KEY."""
+    from app.services import ai_service
+
+    def ask(prompt: str) -> BaseModel:
+        res = ai_service.get_openai().responses.parse(model=JUDGE_MODEL, input=prompt, text_format=model,
+                                                      reasoning=JUDGE_REASONING, max_output_tokens=32768)
+        if res.output_parsed is None:
+            raise ValueError("판정 응답이 비었습니다")
+        return res.output_parsed
+
+    return ask
 VERSIONS = ("plain", "rag")
 
 
@@ -372,7 +388,7 @@ def _cases() -> list[dict]:
     return [{k: c[k] for k in ("case", "profile", "inbody")} for c in (*knhanes(), *_synthetic_cases())]
 
 
-def run(out_dir, pause: float = 15.0) -> None:
+def run(out_dir, pause: float = 15.0, judge: str = "api") -> None:
     import time
 
     from dotenv import load_dotenv
@@ -385,8 +401,11 @@ def run(out_dir, pause: float = 15.0) -> None:
     (out_dir / "plain_prompt.txt").write_text(f"[시스템]\n{instructions}\n\n[지침]\n{guide}\n", encoding="utf-8")
     path = out_dir / "state.json"
     state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}  # 끊겨도 이어서 한다
-    ask_claims = codex_ask(model=Claims, schema=schema_of(Claims))
-    ask_verdicts = codex_ask(model=Verdicts, schema=schema_of(Verdicts))
+    if judge == "codex":
+        ask_claims = codex_ask(model=Claims, schema=schema_of(Claims))
+        ask_verdicts = codex_ask(model=Verdicts, schema=schema_of(Verdicts))
+    else:
+        ask_claims, ask_verdicts = api_ask(Claims), api_ask(Verdicts)
     for case in _cases():
         for version in VERSIONS:
             key = f"{case['case']}|{version}"
@@ -441,8 +460,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("run", "summarize", "spotcheck"))
     parser.add_argument("--out", type=Path, default=Path("rag/eval/preview/grounding"))
+    parser.add_argument("--judge", choices=("api", "codex"), default="api")
     args = parser.parse_args()
-    {"run": run, "summarize": summarize, "spotcheck": spotcheck}[args.command](args.out)
+    if args.command == "run":
+        run(args.out, judge=args.judge)
+    else:
+        {"summarize": summarize, "spotcheck": spotcheck}[args.command](args.out)
 
 
 if __name__ == "__main__":
