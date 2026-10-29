@@ -232,3 +232,176 @@ def render_summary(entries: list[dict], spotcheck: dict | None = None) -> str:
     for bad, good in examples(entries):
         out += [f"- 단순 프롬프트(근거 없음): {bad['text']}", f"  RAG(인용·뒷받침): {good['text']}"]
     return "\n".join(out) + "\n"
+
+
+# ── 실행 ─────────────────────────────────────────────────────────────
+
+TOP_K = 5  # 주장마다 코퍼스 판정 후보 수. 두 버전이 같은 조건이다
+VERSIONS = ("plain", "rag")
+
+
+def plain_prompts() -> tuple[str, str]:
+    from app.services import ai_service
+
+    return plain_text(ai_service._REPORT_SYSTEM_INSTRUCTION), plain_text(ai_service._REPORT_GUIDE)
+
+
+def generate(case: dict, version: str) -> tuple[dict, list[dict]]:
+    """report_preview._report와 같은 순서. plain은 앱 코드를 바꾸지 않고 프롬프트만 바꿔 끼운다."""
+    from unittest.mock import patch
+
+    from app.services import ai_service
+    from app.services.personal_metrics import compute
+    from app.services.prediction_service import predict_all
+
+    prof, inbody = case["profile"], case["inbody"]
+    risks = predict_all(inbody, prof)
+    metrics = compute(inbody, prof)
+    if version == "plain":
+        instructions, guide = plain_prompts()
+
+        def prompt(payload, evidence, previous):
+            return "\n".join([guide, "[사용자 데이터]", json.dumps(payload, ensure_ascii=False, default=str)])
+
+        with patch.object(ai_service, "_REPORT_SYSTEM_INSTRUCTION", instructions), \
+                patch.object(ai_service, "build_report_prompt", prompt):
+            report = ai_service.generate_report(risks, prof, inbody_metrics=inbody, personal_metrics=metrics)
+        for items in (report["risk_report"], report["lifestyle_plan"], report["supplement_candidates"],
+                      report["body_composition_report"]["watch_points"]):
+            for item in items:
+                item["source_ids"] = []  # 근거 블록이 없으니 인용도 없다
+        return report, []
+
+    from app.services.citation_service import validate_citations
+    from app.services.rag_taxonomy import build_queries, trait_queries
+    from app.services.retrieval_service import retrieve
+
+    queries = [*build_queries(risks, inbody, prof["gender"]), *trait_queries(risks, prof, metrics, None)]
+    evidence = retrieve(queries)
+    raw = ai_service.generate_report(risks, prof, inbody_metrics=inbody, evidence=evidence, personal_metrics=metrics)
+    report, _ = validate_citations(raw, evidence)
+    return report, [{"sid": e.sid, "chunk_id": e.chunk_id, "title": e.title, "heading_path": e.heading_path,
+                     "content": e.content} for e in evidence]
+
+
+def search(texts: list[str]) -> list[list[dict]]:
+    """주장 문장마다 코퍼스 상위 TOP_K. 유사도 하한 없이 받는다."""
+    from app.core.supabase import get_supabase_admin
+    from app.services.embedding_service import embed
+    from app.services.retrieval_service import _vector_literal
+
+    client = get_supabase_admin()
+    return [client.rpc("match_rag_chunks", {"query_embedding": _vector_literal(v), "match_count": TOP_K,
+                                            "min_similarity": -1.0}).execute().data or []
+            for v in embed(texts, "query")]
+
+
+def _judge(claims: list[dict], passages: dict[str, list[dict]], ask_verdicts) -> dict[str, dict]:
+    if not claims:
+        return {}
+    items = [{"id": c["id"], "text": c["text"], "passages": passages[c["id"]]} for c in claims]
+    verdicts = ask_verdicts(judge_prompt(items))
+    return apply_verdicts(claims, verdicts, {cid: [p["pid"] for p in ps] for cid, ps in passages.items()})
+
+
+def evaluate(entry: dict, ask_claims, ask_verdicts, search_fn) -> dict:
+    """비어 있는 단계만 채운다(이미 한 단계는 다시 부르지 않는다)."""
+    if "claims" not in entry:
+        fields = report_fields(entry["report"])
+        entry["claims"] = clean_claims(ask_claims(extract_prompt(fields)), fields)
+    medical = [c for c in entry["claims"] if c["kind"] == "medical"]
+    if "corpus" not in entry:
+        rows = search_fn([c["text"] for c in medical]) if medical else []
+        passages = {c["id"]: [{"pid": f"p{i}", "chunk_id": r["chunk_id"], "title": r["title"],
+                               "heading_path": r.get("heading_path"), "content": r["content"]}
+                              for i, r in enumerate(hits, 1)] for c, hits in zip(medical, rows, strict=True)}
+        judged = _judge(medical, passages, ask_verdicts)
+        entry["corpus"] = {cid: {**v, "passages": passages[cid]} for cid, v in judged.items()}
+    if "cited" not in entry:
+        entry["cited"] = {}
+        if entry["version"] == "rag":
+            evidence, sources = {e["sid"]: e for e in entry["evidence"]}, item_sources(entry["report"])
+            passages = {c["id"]: [{"pid": sid, "content": evidence[sid]["content"]}
+                                  for sid in sources.get(item_of(c["field_id"]), []) if sid in evidence]
+                        for c in medical}
+            entry["cited"] = _judge([c for c in medical if passages[c["id"]]], passages, ask_verdicts)
+    return entry
+
+
+def _cases() -> list[dict]:
+    from rag.eval.report_preview import _cases as knhanes, _synthetic_cases
+
+    return [{k: c[k] for k in ("case", "profile", "inbody")} for c in (*knhanes(), *_synthetic_cases())]
+
+
+def run(out_dir, pause: float = 15.0) -> None:
+    import time
+
+    from dotenv import load_dotenv
+
+    from rag.eval.judge import codex_ask
+
+    load_dotenv(".env")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    instructions, guide = plain_prompts()
+    (out_dir / "plain_prompt.txt").write_text(f"[시스템]\n{instructions}\n\n[지침]\n{guide}\n", encoding="utf-8")
+    path = out_dir / "state.json"
+    state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}  # 끊겨도 이어서 한다
+    ask_claims = codex_ask(model=Claims, schema=schema_of(Claims))
+    ask_verdicts = codex_ask(model=Verdicts, schema=schema_of(Verdicts))
+    for case in _cases():
+        for version in VERSIONS:
+            key = f"{case['case']}|{version}"
+            entry = state.get(key)
+            if entry is None:
+                report, evidence = generate(case, version)
+                entry = state[key] = {"case": case["case"], "version": version, "report": report, "evidence": evidence}
+                _dump(path, state)
+            if "cited" in entry:
+                continue
+            time.sleep(pause)  # Gemini 임베딩 무료 등급 분당 100건
+            evaluate(entry, ask_claims, ask_verdicts, search)
+            _dump(path, state)
+            m = metrics([entry])
+            print(f"{key}: 의학 주장 {m['medical']}, 인용률 {_pct(m['citation_rate'])}, "
+                  f"근거 없음 {_pct(m['unsupported_rate'])}", flush=True)
+
+
+def _load(out_dir) -> list[dict]:
+    return list(json.loads((out_dir / "state.json").read_text(encoding="utf-8")).values())
+
+
+def summarize(out_dir) -> None:
+    check = out_dir / "spotcheck.json"
+    spot = json.loads(check.read_text(encoding="utf-8")) if check.exists() else None
+    (out_dir / "summary.md").write_text(render_summary(_load(out_dir), spot), encoding="utf-8")
+    print((out_dir / "summary.md").read_text(encoding="utf-8"))
+
+
+def spotcheck(out_dir, n: int = 20, seed: int = 0) -> None:
+    """코퍼스 판정 n개를 무작위로 뽑아 재판정용 문서로 쓴다. 버전은 숨긴다."""
+    import random
+
+    picks = [(e, c) for e in _load(out_dir) for c in e["claims"]
+             if c["kind"] == "medical" and e["corpus"].get(c["id"], {}).get("verdict", "missing") != "missing"]
+    lines = []
+    for i, (e, c) in enumerate(random.Random(seed).sample(picks, min(n, len(picks))), 1):
+        v = e["corpus"][c["id"]]
+        lines += [f"## {i}. {c['text']}", f"판정: {v['verdict']} {v['passage_ids']}", ""]
+        lines += [f"- ({p['pid']}) {p['title']} › {p['heading_path']}: {p['content']}" for p in v["passages"]] + [""]
+    (out_dir / "spotcheck.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def main() -> None:
+    import argparse
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=("run", "summarize", "spotcheck"))
+    parser.add_argument("--out", type=Path, default=Path("rag/eval/preview/grounding"))
+    args = parser.parse_args()
+    {"run": run, "summarize": summarize, "spotcheck": spotcheck}[args.command](args.out)
+
+
+if __name__ == "__main__":
+    main()

@@ -113,3 +113,68 @@ def test_render_summary_has_both_versions_and_examples():
     assert g.examples([plain, rag]) == [(plain["claims"][0], rag["claims"][0])]
     md = g.render_summary([plain, rag])
     assert "단순 프롬프트" in md and "RAG" in md and "근거 없는 주장 비율" in md
+
+
+class _Fake:
+    def __init__(self, result):
+        self.result, self.prompts = result, []
+
+    def __call__(self, prompt):
+        self.prompts.append(prompt)
+        return self.result
+
+
+def _fakes():
+    claims = _Fake(g.Claims(claims=[g.Claim(field_id="plan[0].actions[0]", text="주 150분 운동", kind="medical"),
+                                    g.Claim(field_id="plan[0].reason", text="체지방률 39%", kind="user_data")]))
+    verdicts = _Fake(g.Verdicts(verdicts=[g.Verdict(claim_id="c1", verdict="supported", passage_ids=["p1"])]))
+    searched = []
+
+    def search(texts):
+        searched.append(texts)
+        return [[{"chunk_id": 9, "title": "운동", "heading_path": "권고", "content": "주 150분"}] for _ in texts]
+
+    return claims, verdicts, search, searched
+
+
+def test_evaluate_fills_stages_and_skips_done_ones():
+    claims, verdicts, search, searched = _fakes()
+    entry = {"case": "A", "version": "rag", "report": _REPORT,
+             "evidence": [{"sid": "S2", "chunk_id": 1, "title": "t", "heading_path": "h", "content": "주 150분"}]}
+    g.evaluate(entry, claims, verdicts, search)
+    assert [c["kind"] for c in entry["claims"]] == ["medical", "user_data"]
+    assert searched == [["주 150분 운동"]]
+    assert entry["corpus"]["c1"]["verdict"] == "supported" and entry["corpus"]["c1"]["passages"][0]["pid"] == "p1"
+    assert "(S2) 주 150분" in verdicts.prompts[-1]  # 인용 판정은 그 항목이 인용한 근거만 본다
+    assert set(entry["cited"]) == {"c1"}
+    calls = (len(claims.prompts), len(verdicts.prompts), len(searched))
+    g.evaluate(entry, claims, verdicts, search)
+    assert (len(claims.prompts), len(verdicts.prompts), len(searched)) == calls
+
+
+def test_evaluate_plain_has_no_cited_stage():
+    claims, verdicts, search, _ = _fakes()
+    entry = {"case": "A", "version": "plain", "report": _REPORT, "evidence": []}
+    g.evaluate(entry, claims, verdicts, search)
+    assert entry["cited"] == {} and len(verdicts.prompts) == 1
+
+
+def test_generate_plain_prompt_has_no_evidence_block(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.schemas.inbody import AIReportContent
+
+    seen = {}
+
+    def parse(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(output_parsed=AIReportContent.model_validate(_REPORT))
+
+    monkeypatch.setattr(ai_service, "get_openai", lambda: SimpleNamespace(responses=SimpleNamespace(parse=parse)))
+    monkeypatch.setattr("app.services.prediction_service.predict_all", lambda inbody, profile: [])
+    case = {"case": "A", "profile": {"gender": "male", "birth_year": 1995}, "inbody": {"weight": 70.0, "bmi": 22.0}}
+    report, evidence = g.generate(case, "plain")
+    text = seen["instructions"] + seen["input"]
+    assert not any(word in text for word in ("[근거]", "S번호", "source_ids")) and "[사용자 데이터]" in text
+    assert evidence == [] and report["lifestyle_plan"][0]["source_ids"] == [] and report["risk_report"][0]["source_ids"] == []
+    assert ai_service._REPORT_GUIDE in ai_service.build_report_prompt({}, [], None)  # 패치가 끝나면 원래대로
