@@ -16,3 +16,9 @@ export type InBodyStackParamList = {
   RiskScreen: { id: string; risks: DiseaseRisk[] };
   ReportScreen: { id: string };
 };
+
+export type SettingsStackParamList = {
+  SettingsMain: undefined;
+  ProfileEdit: undefined;
+  Policy: { kind: 'privacy' | 'terms' };
+};

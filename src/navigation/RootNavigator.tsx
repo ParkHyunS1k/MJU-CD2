@@ -20,16 +20,19 @@ import RiskScreen from '../screens/RiskScreen';
 import ReportScreen from '../screens/ReportScreen';
 import ReportTabScreen from '../screens/ReportTabScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ProfileEditScreen from '../screens/ProfileEditScreen';
+import PolicyScreen from '../screens/PolicyScreen';
 import HealthSurveyScreen from '../screens/HealthSurveyScreen';
 import { api } from '../lib/api';
 import type { UserProfile } from '../types/models';
-import type { AuthStackParamList, InBodyStackParamList } from './types';
+import type { AuthStackParamList, InBodyStackParamList, SettingsStackParamList } from './types';
 
 const TEAL = '#00C2A8';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator();
 const InBodyStack = createNativeStackNavigator<InBodyStackParamList>();
+const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
 function AuthStackNavigator() {
   return (
@@ -52,7 +55,13 @@ function InBodyStackNavigator() {
       <InBodyStack.Screen
         name="InBodyList"
         component={InBodyListScreen}
-        options={{ title: '기록' }}
+        // 다른 탭(홈·리포트·설정)처럼 청록 헤더로 맞춘다
+        options={{
+          title: '기록',
+          headerStyle: { backgroundColor: TEAL },
+          headerTintColor: '#fff',
+          headerShadowVisible: false,
+        }}
       />
       <InBodyStack.Screen
         name="InBodyDetail"
@@ -93,6 +102,35 @@ function InBodyStackNavigator() {
   );
 }
 
+function SettingsStackNavigator() {
+  return (
+    <SettingsStack.Navigator
+      screenOptions={{
+        headerTintColor: TEAL,
+        headerTitleStyle: { fontWeight: '700' },
+      }}
+    >
+      <SettingsStack.Screen
+        name="SettingsMain"
+        component={SettingsScreen}
+        options={{ headerShown: false }}
+      />
+      <SettingsStack.Screen
+        name="ProfileEdit"
+        component={ProfileEditScreen}
+        options={{ title: '프로필 관리' }}
+      />
+      <SettingsStack.Screen
+        name="Policy"
+        component={PolicyScreen}
+        options={({ route }) => ({
+          title: route.params.kind === 'privacy' ? '개인정보 처리방침' : '이용약관',
+        })}
+      />
+    </SettingsStack.Navigator>
+  );
+}
+
 type TabIconName = keyof typeof Ionicons.glyphMap;
 
 const TAB_ICONS: Record<string, { active: TabIconName; inactive: TabIconName }> = {
@@ -123,7 +161,7 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: '홈' }} />
       <Tab.Screen name="Report" component={ReportTabScreen} options={{ title: '리포트' }} />
       <Tab.Screen name="Records" component={InBodyStackNavigator} options={{ title: '기록' }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: '설정' }} />
+      <Tab.Screen name="Settings" component={SettingsStackNavigator} options={{ title: '설정' }} />
     </Tab.Navigator>
   );
 }

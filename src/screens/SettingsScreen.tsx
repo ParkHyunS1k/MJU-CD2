@@ -1,20 +1,49 @@
 import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useAuth } from '../contexts/AuthContext';
+import type { SettingsStackParamList } from '../navigation/types';
 
 const TEAL = '#00C2A8';
 
-const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; sub: string }[] = [
-  { icon: 'person-outline', label: '프로필 관리', sub: '이름, 나이, 목표 설정' },
+type Nav = NativeStackNavigationProp<SettingsStackParamList, 'SettingsMain'>;
+
+// go가 없는 메뉴는 아직 화면이 없다
+type Item = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sub: string;
+  go?: (navigation: Nav) => void;
+};
+
+const ITEMS: Item[] = [
+  {
+    icon: 'person-outline',
+    label: '프로필 관리',
+    sub: '이름, 나이, 목표 설정',
+    go: (n) => n.navigate('ProfileEdit'),
+  },
   { icon: 'notifications-outline', label: '알림 설정', sub: '건강 리마인더' },
-  { icon: 'shield-checkmark-outline', label: '개인정보 처리방침', sub: '' },
-  { icon: 'document-text-outline', label: '이용약관', sub: '' },
+  {
+    icon: 'shield-checkmark-outline',
+    label: '개인정보 처리방침',
+    sub: '',
+    go: (n) => n.navigate('Policy', { kind: 'privacy' }),
+  },
+  {
+    icon: 'document-text-outline',
+    label: '이용약관',
+    sub: '',
+    go: (n) => n.navigate('Policy', { kind: 'terms' }),
+  },
 ];
 
 export default function SettingsScreen() {
   const { signOut } = useAuth();
+  const navigation = useNavigation<Nav>();
 
   const onSignOut = () => {
     Alert.alert('로그아웃', '정말 로그아웃 하시겠습니까?', [
@@ -34,6 +63,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             key={item.label}
             style={[styles.row, idx < ITEMS.length - 1 && styles.rowBorder]}
+            onPress={item.go ? () => item.go!(navigation) : undefined}
           >
             <View style={styles.rowLeft}>
               <View style={styles.rowIconWrap}>

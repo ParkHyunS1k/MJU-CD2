@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 import { api, UploadFile } from '../lib/api';
 import type { InBodyStackParamList } from '../navigation/types';
@@ -18,11 +20,20 @@ import type { InBodyStackParamList } from '../navigation/types';
 type Nav = NativeStackNavigationProp<InBodyStackParamList, 'InBodyUpload'>;
 
 const TEAL = '#00C2A8';
+const MAX_BYTES = 15 * 1024 * 1024; // 서버 제한과 같음
+
+// 사진 보관함·카메라: 아이폰의 HEIC 사진을 JPG로 바꿔 받는다(서버·AI 호환)
+const PHOTO_OPTIONS: ImagePicker.ImagePickerOptions = {
+  mediaTypes: ['images'],
+  quality: 0.85,
+  preferredAssetRepresentationMode:
+    ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+};
 
 function guessMimeFromUri(uri: string): string {
   const lower = uri.toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
-  if (lower.endsWith('.heic')) return 'image/heic';
+  if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
   if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.pdf')) return 'application/pdf';
   return 'image/jpeg';
@@ -33,6 +44,42 @@ export default function InBodyUploadScreen() {
   const [busy, setBusy] = useState(false);
   const [selectedFile, setSelectedFile] = useState<UploadFile | null>(null);
 
+  // 고른 파일을 서버가 받는 형식으로 정리해서 저장한다
+  const select = (file: UploadFile, size?: number | null) => {
+    if (size && size > MAX_BYTES) {
+      Alert.alert('파일이 너무 커요', '15MB 이하의 파일을 선택해 주세요.');
+      return;
+    }
+    // 서버는 image/heic만 받으므로 heif도 heic로 보낸다
+    const type = file.type === 'image/heif' ? 'image/heic' : file.type;
+    setSelectedFile({ ...file, type });
+  };
+
+  const fromImageAsset = (asset: ImagePicker.ImagePickerAsset) => {
+    const name = asset.fileName ?? `inbody_${Date.now()}.jpg`;
+    select(
+      { uri: asset.uri, name, type: asset.mimeType ?? guessMimeFromUri(name) },
+      asset.fileSize,
+    );
+  };
+
+  // 사진 보관함: 아이폰은 문서 선택기로는 사진 앱에 접근할 수 없어서 따로 연다
+  const pickFromLibrary = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync(PHOTO_OPTIONS);
+    if (!res.canceled) fromImageAsset(res.assets[0]);
+  };
+
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('카메라 권한이 필요해요', '설정에서 카메라 접근을 허용해 주세요.');
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync(PHOTO_OPTIONS);
+    if (!res.canceled) fromImageAsset(res.assets[0]);
+  };
+
+  // 파일: 인바디 앱에서 내보낸 PDF 등
   const pickFile = async () => {
     const res = await DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
@@ -40,16 +87,15 @@ export default function InBodyUploadScreen() {
     });
     if (res.canceled) return;
     const asset = res.assets[0];
-    setSelectedFile({
-      uri: asset.uri,
-      name: asset.name,
-      type: asset.mimeType ?? guessMimeFromUri(asset.name),
-    });
+    select(
+      { uri: asset.uri, name: asset.name, type: asset.mimeType ?? guessMimeFromUri(asset.name) },
+      asset.size,
+    );
   };
 
   const handleAnalyze = async () => {
     if (!selectedFile) {
-      await pickFile();
+      await pickFromLibrary();
       return;
     }
     setBusy(true);
@@ -69,11 +115,12 @@ export default function InBodyUploadScreen() {
   };
 
   const INFO_ITEMS = [
-    '인바디 앱 PDF 출력물',
     '인바디 측정지 사진 (JPG, PNG, HEIC)',
-    '최대 파일 크기: 10MB',
-    '여러 파일 동시 업로드 가능',
+    '인바디 앱 PDF 출력물',
+    '최대 파일 크기: 15MB',
+    '결과지 전체가 보이고 글자가 흐리지 않게 찍어 주세요',
   ];
+  const isImage = selectedFile?.type.startsWith('image/') ?? false;
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -87,19 +134,47 @@ export default function InBodyUploadScreen() {
           인바디 앱에서 내보낸 측정 결과 또는 인바디 측정지 사진을 업로드해 주세요.
         </Text>
 
-        <TouchableOpacity style={styles.uploadZone} onPress={pickFile} activeOpacity={0.7}>
-          <Ionicons name="cloud-upload-outline" size={40} color="#CCCCCC" />
-          <Text style={styles.uploadZoneTitle}>
-            {selectedFile ? selectedFile.name : '파일을 드래그하거나 클릭하여 선택'}
+        <View style={styles.uploadZone}>
+          {selectedFile && isImage ? (
+            <Image source={{ uri: selectedFile.uri }} style={styles.preview} resizeMode="contain" />
+          ) : (
+            <Ionicons
+              name={selectedFile ? 'document-text-outline' : 'cloud-upload-outline'}
+              size={40}
+              color={selectedFile ? TEAL : '#CCCCCC'}
+            />
+          )}
+          <Text style={styles.uploadZoneTitle} numberOfLines={1}>
+            {selectedFile ? selectedFile.name : '아래에서 결과지를 선택하세요'}
           </Text>
-          <Text style={styles.uploadZoneSub}>PDF, JPG, PNG, HEIC 파일 지원</Text>
-          {selectedFile && (
+          {selectedFile ? (
             <View style={styles.fileSelectedBadge}>
               <Ionicons name="checkmark-circle" size={14} color={TEAL} />
-              <Text style={styles.fileSelectedText}>파일 선택됨</Text>
+              <Text style={styles.fileSelectedText}>파일 선택됨 · 다시 고르려면 아래 버튼</Text>
             </View>
+          ) : (
+            <Text style={styles.uploadZoneSub}>PDF, JPG, PNG, HEIC 파일 지원</Text>
           )}
-        </TouchableOpacity>
+        </View>
+
+        <View style={styles.sourceRow}>
+          {[
+            { icon: 'images-outline' as const, label: '사진 보관함', onPress: pickFromLibrary },
+            { icon: 'camera-outline' as const, label: '카메라 촬영', onPress: takePhoto },
+            { icon: 'folder-open-outline' as const, label: '파일 (PDF)', onPress: pickFile },
+          ].map((opt) => (
+            <TouchableOpacity
+              key={opt.label}
+              style={styles.sourceBtn}
+              onPress={opt.onPress}
+              disabled={busy}
+              activeOpacity={0.7}
+            >
+              <Ionicons name={opt.icon} size={24} color={TEAL} />
+              <Text style={styles.sourceText}>{opt.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>업로드 가능한 파일</Text>
@@ -169,6 +244,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   uploadZoneSub: { fontSize: 12, color: '#AAAAAA' },
+  preview: { width: '80%', height: 160, borderRadius: 8, backgroundColor: '#F5F5F5' },
+  sourceRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  sourceBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#B5EDE3',
+    paddingVertical: 14,
+  },
+  sourceText: { fontSize: 12, fontWeight: '600', color: '#333' },
   fileSelectedBadge: {
     flexDirection: 'row',
     alignItems: 'center',

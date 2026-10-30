@@ -19,9 +19,9 @@ const TEAL = '#00C2A8';
 
 function getOverallRisk(record: InBodyRecord): string {
   const risks = record.ai_report?.risk_report;
-  if (!risks?.length) return '낮음';
+  if (!risks?.length) return '분석 전'; // 리포트가 없으면 위험도를 알 수 없다
   if (risks.some((r) => r.risk_level === 'high')) return '높음';
-  if (risks.some((r) => r.risk_level === 'medium')) return '보통';
+  if (risks.some((r) => r.risk_level === 'medium')) return '주의';
   return '낮음';
 }
 
@@ -88,12 +88,9 @@ export default function HomeScreen() {
                   {formatYearMonth(latest.measured_at)} · 위험도 {getOverallRisk(latest)}
                 </Text>
                 <View style={styles.tagRow}>
-                  <View style={styles.tag}>
-                    <Text style={styles.tagText}>정상</Text>
-                  </View>
                   {latest.ai_report?.risk_report?.some((r) => r.risk_level === 'medium') && (
                     <View style={[styles.tag, styles.tagOrange]}>
-                      <Text style={[styles.tagText, styles.tagTextOrange]}>재진찰 주의</Text>
+                      <Text style={[styles.tagText, styles.tagTextOrange]}>주의할 질환 있음</Text>
                     </View>
                   )}
                   {(latest.skeletal_muscle_mass ?? 0) >= 28 && (
@@ -216,7 +213,7 @@ const styles = StyleSheet.create({
 
   uploadDesc: { fontSize: 13, color: '#757575', lineHeight: 20, marginBottom: 14 },
   uploadBtn: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: TEAL,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',

@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import { api } from '../lib/api';
 import type { InBodyStackParamList } from '../navigation/types';
 import type { InBodyRecord } from '../types/models';
@@ -67,7 +69,7 @@ export default function InBodyListScreen() {
           />
         }
         ListEmptyComponent={
-          <Text style={styles.empty}>기록이 없습니다. 우측 하단 + 버튼으로 추가하세요.</Text>
+          <Text style={styles.empty}>{'기록이 없습니다.\n오른쪽 아래 카메라 버튼으로 결과지를 올리거나\n+ 버튼으로 직접 입력하세요.'}</Text>
         }
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -92,14 +94,14 @@ export default function InBodyListScreen() {
         style={[styles.fab, styles.fabSecondary]}
         onPress={() => nav.navigate('InBodyCreate')}
       >
-        <Text style={styles.fabText}>＋</Text>
+        <Ionicons name="add" size={28} color="#00A38D" />
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.fab}
         onPress={() => nav.navigate('InBodyUpload')}
       >
-        <Text style={styles.fabText}>📷</Text>
+        <Ionicons name="camera" size={26} color="#fff" />
       </TouchableOpacity>
     </View>
   );
@@ -109,7 +111,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyWrap: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  empty: { color: '#666', textAlign: 'center' },
+  empty: { color: '#666', textAlign: 'center', lineHeight: 22 },
   row: {
     padding: 14,
     backgroundColor: '#f6f8fa',
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1f6feb',
+    backgroundColor: '#00C2A8',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -139,7 +141,8 @@ const styles = StyleSheet.create({
   },
   fabSecondary: {
     bottom: 92,
-    backgroundColor: '#6c757d',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#00C2A8',
   },
-  fabText: { color: '#fff', fontSize: 24, lineHeight: 26, fontWeight: '700' },
 });

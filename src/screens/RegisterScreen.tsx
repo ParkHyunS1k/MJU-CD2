@@ -20,6 +20,15 @@ import type { AuthStackParamList } from '../navigation/types';
 
 type NavProp = NativeStackNavigationProp<AuthStackParamList>;
 
+const TEAL = '#00C2A8';
+
+// 화면에 안내한 비밀번호 조건. 안내 문구와 실제 검사가 같은 목록을 쓴다.
+const PASSWORD_RULES: { label: string; test: (pw: string) => boolean }[] = [
+  { label: '8자 이상', test: (pw) => pw.length >= 8 },
+  { label: '영문 포함', test: (pw) => /[A-Za-z]/.test(pw) },
+  { label: '숫자 포함', test: (pw) => /\d/.test(pw) },
+];
+
 export default function RegisterScreen() {
   const { signUp } = useAuth();
   const navigation = useNavigation<NavProp>();
@@ -33,11 +42,19 @@ export default function RegisterScreen() {
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const canSubmit = agreed && !busy;
+  const passwordValid = PASSWORD_RULES.every((r) => r.test(password));
+  const passwordsMatch = confirmPw.length > 0 && password === confirmPw;
+  const canSubmit =
+    agreed && !busy && !!name.trim() && !!email.trim() && passwordValid && passwordsMatch;
 
   const onRegister = async () => {
     if (!name || !email || !password || !confirmPw) {
       Alert.alert('모든 항목을 입력해주세요.');
+      return;
+    }
+    const failed = PASSWORD_RULES.filter((r) => !r.test(password)).map((r) => r.label);
+    if (failed.length > 0) {
+      Alert.alert('비밀번호 조건을 확인해 주세요', `${failed.join(', ')} 조건이 필요해요.`);
       return;
     }
     if (password !== confirmPw) {
@@ -109,7 +126,21 @@ export default function RegisterScreen() {
               <Ionicons name={showPw ? 'eye-outline' : 'eye-off-outline'} size={20} color="#999" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.hint}>8자 이상, 영문, 숫자 포함</Text>
+          <View style={styles.ruleRow}>
+            {PASSWORD_RULES.map((rule) => {
+              const ok = rule.test(password);
+              return (
+                <View key={rule.label} style={styles.ruleItem}>
+                  <Ionicons
+                    name={ok ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={14}
+                    color={ok ? TEAL : '#BBBBBB'}
+                  />
+                  <Text style={[styles.ruleText, ok && styles.ruleTextOk]}>{rule.label}</Text>
+                </View>
+              );
+            })}
+          </View>
 
           <Text style={styles.label}>비밀번호 확인</Text>
           <View style={styles.inputRow}>
@@ -126,6 +157,11 @@ export default function RegisterScreen() {
               <Ionicons name={showConfirmPw ? 'eye-outline' : 'eye-off-outline'} size={20} color="#999" />
             </TouchableOpacity>
           </View>
+          {confirmPw.length > 0 && (
+            <Text style={[styles.matchText, passwordsMatch ? styles.matchOk : styles.matchBad]}>
+              {passwordsMatch ? '비밀번호가 일치해요' : '비밀번호가 일치하지 않아요'}
+            </Text>
+          )}
 
           <TouchableOpacity
             style={styles.termsRow}
@@ -247,12 +283,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
-  hint: {
-    fontSize: 12,
-    color: '#AAAAAA',
-    marginBottom: 14,
-    marginTop: 2,
-  },
+  ruleRow: { flexDirection: 'row', gap: 12, marginTop: 6, marginBottom: 14 },
+  ruleItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  ruleText: { fontSize: 12, color: '#AAAAAA' },
+  ruleTextOk: { color: TEAL, fontWeight: '600' },
+  matchText: { fontSize: 12, marginTop: 6 },
+  matchOk: { color: TEAL },
+  matchBad: { color: '#E53935' },
 
   termsRow: {
     flexDirection: 'row',

@@ -16,8 +16,8 @@ type NavProp = NativeStackNavigationProp<AuthStackParamList>;
 const FEATURES = [
   {
     icon: 'document-text-outline' as const,
-    title: '건강검진 결과 업로드',
-    desc: 'PDF 사본으로 건강 결과를 손쉽게 업로드하여 AI가 자동으로 분석합니다.',
+    title: '인바디 결과지 업로드',
+    desc: '인바디 결과지를 사진이나 PDF로 올리면 AI가 수치를 읽고 분석합니다.',
   },
   {
     icon: 'trending-up-outline' as const,

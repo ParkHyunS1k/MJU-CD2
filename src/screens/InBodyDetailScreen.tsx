@@ -24,6 +24,7 @@ type Nav = NativeStackNavigationProp<InBodyStackParamList, 'InBodyDetail'>;
 type R = RouteProp<InBodyStackParamList, 'InBodyDetail'>;
 
 const FIELD_LABELS: { key: keyof InBodyRecord; label: string; unit?: string }[] = [
+  { key: 'height', label: '신장', unit: 'cm' },
   { key: 'weight', label: '체중', unit: 'kg' },
   { key: 'skeletal_muscle_mass', label: '골격근량', unit: 'kg' },
   { key: 'body_fat_mass', label: '체지방량', unit: 'kg' },
@@ -31,10 +32,11 @@ const FIELD_LABELS: { key: keyof InBodyRecord; label: string; unit?: string }[] 
   { key: 'body_water', label: '체수분', unit: 'L' },
   { key: 'protein', label: '단백질', unit: 'kg' },
   { key: 'minerals', label: '무기질', unit: 'kg' },
-  { key: 'bmi', label: 'BMI' },
+  { key: 'bmi', label: 'BMI', unit: 'kg/㎡' },
   { key: 'basal_metabolic_rate', label: '기초대사량', unit: 'kcal' },
-  { key: 'abs_fat', label: '복부지방' },
-  { key: 'fat_level', label: '체지방 레벨' },
+  { key: 'abs_fat', label: '복부지방률' },
+  { key: 'fat_level', label: '내장지방 레벨' },
+  { key: 'muscle_control', label: '근육조절', unit: 'kg' },
 ];
 
 export default function InBodyDetailScreen() {
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 15, fontWeight: '600' },
   reportButton: {
     marginTop: 16,
-    backgroundColor: '#4f6ef7',
+    backgroundColor: '#00C2A8',
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
