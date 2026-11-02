@@ -19,6 +19,6 @@ VECTORS = sorted(HERE.glob("vectors/*.json")) + sorted(HERE.glob("vectors_local/
 @pytest.mark.parametrize("path", VECTORS, ids=[p.stem for p in VECTORS])
 def test_vector(path: Path):
     v = json.loads(path.read_text())
-    got = parse([OcrLine.from_json(l) for l in v["lines"]]).extraction.model_dump()
+    got = parse([OcrLine.from_json(l) for l in v["lines"]]).extraction.model_dump(mode="json")
     wrong = {k: (got[k], want) for k, want in v["expected"].items() if got[k] != want}
     assert not wrong, f"(got, want): {wrong}"

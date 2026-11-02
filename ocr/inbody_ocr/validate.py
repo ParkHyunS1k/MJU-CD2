@@ -26,6 +26,7 @@ class Check:
     actual: Callable[[dict], float]  # 우변 계산
     tol: float  # 반올림 오차를 감안한 허용치
     description: str
+    confirms: bool = True  # False: 타당성 검사. 실패하면 low지만 통과해도 ok로 올리지 않는다
 
 
 # 허용치 근거: 결과지 값은 대부분 소수 1자리 반올림이라 항목 4개 합산 시 최대 ±0.2 오차.
@@ -63,6 +64,60 @@ CHECKS: list[Check] = [
         0.3,
         "체지방률 = 체지방량 / 체중 × 100",
     ),
+    # Katch-McArdle 식. InBody270 결과지 25장(1인)에서 오차 ±1.3 이내 확인. 다른 기종은 미확인
+    Check(
+        "basal_metabolic_rate",
+        ("fat_free_mass_kg", "basal_metabolic_rate_kcal"),
+        lambda v: 370 + 21.6 * v["fat_free_mass_kg"],
+        lambda v: v["basal_metabolic_rate_kcal"],
+        2.0,
+        "기초대사량 = 370 + 21.6 × 제지방량",
+    ),
+    Check(
+        "weight_control",
+        ("ideal_weight_kg", "weight_kg", "weight_control_kg"),
+        lambda v: v["ideal_weight_kg"] - v["weight_kg"],
+        lambda v: v["weight_control_kg"],
+        0.15,
+        "체중조절 = 적정체중 - 체중",
+    ),
+    Check(
+        "control_sum",
+        ("fat_control_kg", "muscle_control_kg", "weight_control_kg"),
+        lambda v: v["fat_control_kg"] + v["muscle_control_kg"],
+        lambda v: v["weight_control_kg"],
+        0.15,
+        "체중조절 = 지방조절 + 근육조절",
+    ),
+    # 표준체중 = 22 × 신장². InBody270 남성 1인 결과지 25장에서 확인. 여성 기준은 미확인이라 남성만 검사
+    Check(
+        "obesity_degree",
+        ("_male", "weight_kg", "height_cm", "obesity_degree_pct"),
+        lambda v: v["weight_kg"] / (22 * (v["height_cm"] / 100) ** 2) * 100,
+        lambda v: v["obesity_degree_pct"],
+        1.0,
+        "비만도 = 체중 / 표준체중(22 × 신장²) × 100 (남성)",
+    ),
+    # 신체변화 그래프 마지막 열 = 이번 측정. 골격근량은 다른 검증식이 없어 이것으로 확인한다
+    Check(
+        "history_smm",
+        ("_history_smm", "skeletal_muscle_mass_kg"),
+        lambda v: v["_history_smm"],
+        lambda v: v["skeletal_muscle_mass_kg"],
+        0.05,
+        "골격근량 = 신체변화 그래프의 이번 측정값",
+    ),
+    # 잠정 범위 (근거: 이 데이터 남성 1인 0.46~0.49, 여성·고도비만은 더 낮을 수 있어 넓게 잡음).
+    # 그래프 눈금 '100'을 10.0으로 읽는 등 자릿수가 틀린 값을 거른다
+    Check(
+        "smm_ratio",
+        ("skeletal_muscle_mass_kg", "weight_kg"),
+        lambda v: v["skeletal_muscle_mass_kg"] / v["weight_kg"],
+        lambda v: 0.425,
+        0.225,
+        "골격근량 / 체중 = 0.2~0.65 (타당성)",
+        confirms=False,
+    ),
 ]
 
 
@@ -98,8 +153,21 @@ class ValidationReport:
         return [k for k, f in self.fields.items() if f.status == "missing"]
 
 
+def _aux_values(ext: InBodyExtraction) -> dict[str, Optional[float]]:
+    """검사에만 쓰는 보조 값 (밑줄로 시작, 필드 상태는 만들지 않는다)."""
+    last = ext.history[-1] if ext.history else None
+    is_current = (
+        last is not None and last.date == ext.measured_at
+        and (last.time is None or ext.measured_time is None or last.time == ext.measured_time)
+    )
+    return {
+        "_male": 1.0 if ext.sex == "M" else None,
+        "_history_smm": last.skeletal_muscle_mass_kg if is_current else None,
+    }
+
+
 def validate(ext: InBodyExtraction) -> ValidationReport:
-    values = {k: getattr(ext, k) for k in FIELD_SPECS}
+    values = {k: getattr(ext, k) for k in FIELD_SPECS} | _aux_values(ext)
     results: dict[str, FieldResult] = {}
 
     for key, spec in FIELD_SPECS.items():
@@ -120,11 +188,13 @@ def validate(ext: InBodyExtraction) -> ValidationReport:
         passed = abs(exp - act) <= chk.tol
         check_results.append(CheckResult(chk.name, chk.description, passed, round(exp, 2), act))
         for f in chk.fields:
+            if f not in results:  # 보조 값
+                continue
             r = results[f]
             if not passed:
                 r.status = "low"
                 r.reasons.append(f"불일치: {chk.description} (계산 {exp:.2f}, 표기 {act})")
-            elif r.status == "unchecked":
+            elif r.status == "unchecked" and chk.confirms:
                 r.status = "ok"
 
     return ValidationReport(results, check_results)

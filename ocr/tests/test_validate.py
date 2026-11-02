@@ -18,7 +18,10 @@ def _ext(**overrides) -> InBodyExtraction:
 
 def test_consistent_sample_passes_all_checks():
     r = validate(_ext())
-    assert all(c.passed for c in r.checks)
+    # 샘플에 없는 값(적정체중·이력 등)이 필요한 검사는 계산 불가(None)
+    computed = {c.name: c.passed for c in r.checks if c.passed is not None}
+    assert {"mass_balance", "fat_free_mass", "bmi", "percent_body_fat", "basal_metabolic_rate"} <= set(computed)
+    assert all(computed.values())
     assert r.fields["weight_kg"].status == "ok"
     # 교차검증 식이 없는 필드는 unchecked
     assert r.fields["skeletal_muscle_mass_kg"].status == "unchecked"
@@ -44,6 +47,14 @@ def test_missing_value_skips_check():
     assert r.fields["bmi"].status == "missing"
     bmi_check = next(c for c in r.checks if c.name == "bmi")
     assert bmi_check.passed is None
+
+
+def test_history_last_point_verifies_smm():
+    # 신체변화 그래프 마지막 열(이번 측정)과 골격근량이 같으면 ok, 다르면 low
+    hist = [{"date": "2026-10-01", "time": "10:00", "skeletal_muscle_mass_kg": 31.0}]
+    same = dict(measured_at="2026-10-01", measured_time="10:00", history=hist)
+    assert validate(_ext(**same)).fields["skeletal_muscle_mass_kg"].status == "ok"
+    assert validate(_ext(**same, skeletal_muscle_mass_kg=37.0)).fields["skeletal_muscle_mass_kg"].status == "low"
 
 
 def test_minor_age_flagged():
