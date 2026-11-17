@@ -6,6 +6,7 @@ KNHANES 사례(+ 선택한 인바디 기록)의 리포트를 만들고, 바꾸�
 
 설계: docs/superpowers/specs/2026-10-28-report-personalization-design.md 5.5절. 결과물은 git 제외(개인 원자료 포함).
 --inbody-json: [{"case": 이름, "profile": {gender, birth_year, fh_*}, "inbody": {...}}, ...]
+--with-previous: 사례마다 1년 전 합성 기록(좋아짐·나빠짐·비슷함 순환)을 붙여 위험도 변화(risk_change)까지 넣는다.
 """
 
 import argparse
@@ -19,6 +20,9 @@ from pathlib import Path
 BADGE = {"low": "낮음", "medium": "주의", "high": "높음"}
 CATEGORY = {"nutrition": "식사", "exercise": "운동", "sleep": "수면", "habit": "습관"}
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
+PREVIOUS_MEASURED_AT = "2025-11-01T00:00:00+00:00"
+# 직전 기록 = 지금 값 + 이만큼. 좋아짐(지난번이 더 높음), 나빠짐, 비슷함(1.0%p 미만 예상) 순으로 돌린다
+_PREVIOUS_DELTAS = [(1.5, 3.0), (-1.5, -3.0), (0.1, -0.2)]
 
 
 def jaccard_mean(sets: list[set]) -> float:
@@ -150,6 +154,30 @@ def _synthetic_cases() -> list[dict]:
     return [{"case": name, **next(r for r in rows if cond(r))} for name, cond in rules]
 
 
+def with_previous(cases: list[dict]) -> list[dict]:
+    out = []
+    for i, case in enumerate(cases):
+        d_bmi, d_pbf = _PREVIOUS_DELTAS[i % len(_PREVIOUS_DELTAS)]
+        inbody = case["inbody"]
+        previous = {**inbody, "measured_at": PREVIOUS_MEASURED_AT, "bmi": round(inbody["bmi"] + d_bmi, 1),
+                    "body_fat_percentage": round(inbody["body_fat_percentage"] + d_pbf, 1)}
+        out.append({**case, "previous": previous})
+    return out
+
+
+def case_risk_change(case: dict, risks: list[dict]) -> list[dict] | None:
+    """앱의 리포트 생성과 같은 계산(risk_store 모양 → risk_change). DB는 쓰지 않는다."""
+    from app.services import risk_change, risk_store
+
+    if not case.get("previous") or not risks:
+        return None
+    before = risk_store.compute(case["previous"], case["profile"])
+    if before is None:
+        return None
+    now = risk_store.from_predictions(case["inbody"], case["profile"], risks)
+    return risk_change.compute(before, now, case["previous"]["measured_at"])
+
+
 def _report(case: dict) -> dict:
     """앱의 _analyze_inbody_record와 같은 순서(DB·추세 제외)."""
     from app.services.ai_service import generate_report
@@ -165,21 +193,25 @@ def _report(case: dict) -> dict:
     traits = trait_queries(risks, prof, metrics, None)
     queries = [*build_queries(risks, inbody, prof["gender"]), *traits]
     evidence = retrieve(queries)
-    raw = generate_report(risks, prof, inbody_metrics=inbody, evidence=evidence, personal_metrics=metrics)
+    changes = case_risk_change(case, risks)
+    raw = generate_report(risks, prof, inbody_metrics=inbody, evidence=evidence, personal_metrics=metrics,
+                          risk_change=changes)
     content, sources = validate_citations(raw, evidence)
     trait_hits = [{"trait": q.trait, "query": q.text,
                    "chunks": [f"{e.title} › {e.heading_path or ''}" for e in evidence if e.trait == q.trait]}
                   for q in traits]
     return {**{k: case[k] for k in case if k != "levels"}, "risks": risks, "personal_metrics": metrics,
-            "queries": [q.text for q in queries], "trait_hits": trait_hits, "report": content, "sources": sources}
+            "risk_change": changes, "queries": [q.text for q in queries], "trait_hits": trait_hits, "report": content, "sources": sources}
 
 
-def run(out: Path, inbody_json: Path | None, synthetic: bool = False) -> None:
+def run(out: Path, inbody_json: Path | None, synthetic: bool = False, previous: bool = False) -> None:
     from dotenv import load_dotenv
 
     load_dotenv(".env")
     cases = (_synthetic_cases() if synthetic else _cases()) + (
         json.loads(inbody_json.read_text(encoding="utf-8")) if inbody_json else [])
+    if previous:
+        cases = with_previous(cases)
     results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else []  # 중간에 끊겨도 이어서 한다
     done = {r["case"] for r in results}
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -248,18 +280,21 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--inbody-json", type=Path)
     r.add_argument("--synthetic", action="store_true", help="KNHANES에 합성 부위 판정을 붙인 5명")
+    r.add_argument("--with-previous", action="store_true", help="1년 전 합성 기록을 붙여 위험도 변화까지")
     c = sub.add_parser("compare")
     c.add_argument("before", type=Path)
     c.add_argument("after", type=Path)
     args = parser.parse_args(argv)
     if args.action == "run":
-        run(args.out, args.inbody_json, args.synthetic)
+        run(args.out, args.inbody_json, args.synthetic, args.with_previous)
         return 0
     before, after = (json.loads(p.read_text(encoding="utf-8")) for p in (args.before, args.after))
     n = min(len(before), len(after))  # 바꾸기 전 결과는 KNHANES 5명뿐이다
     print(json.dumps({"before": summarize(before[:n]), "after": summarize(after[:n])}, ensure_ascii=False))
     for res in after:
         print("\n" + render(res))
+        for c in res.get("risk_change") or []:
+            print(f"  · 변화 [{c['disease']}] {c['previous_pct']}→{c['current_pct']}% ({c['change_pp']:+}%p) 몫 {c['share_pp']}")
         for t in res.get("trait_hits", []):
             print(f"  · 특성 [{t['trait']}] {t['query']} → {len(t['chunks'])}개 {t['chunks'][:2]}")
     return 0
