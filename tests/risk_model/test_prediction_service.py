@@ -32,7 +32,7 @@ def test_output_shape(models_dir):
     res = ps.predict_all(INBODY, PROFILE)
     assert [r["disease"] for r in res] == ["고혈압", "고콜레스테롤", "당뇨", "고중성지방"]
     for r in res:
-        assert set(r) == {"disease", "disease_key", "probability", "risk_level", "top_factors"}
+        assert set(r) == {"disease", "disease_key", "probability", "risk_level", "top_factors", "contributions"}
         assert r["disease_key"] in {"hypertension", "cholesterol", "diabetes", "triglyceride"}
         assert 0 < r["probability"] < 1 and r["risk_level"] in {"low", "medium", "high"}
         assert 1 <= len(r["top_factors"]) <= 3
@@ -183,3 +183,25 @@ def test_only_own_disease_family_history_in_factors(knhanes_like, tmp_path, monk
         shown = {f["feature_kor"] for f in r["top_factors"]} & FH_LABELS
         assert shown == {OWN_FH[r["disease"]]}
     ps._load_bundle.cache_clear()
+
+
+def test_age_uses_measurement_year(models_dir):
+    old = {**INBODY, "measured_at": f"{date.today().year - 10}-05-01T00:00:00+00:00"}
+    now, past = ps.predict_all(INBODY, PROFILE), ps.predict_all(old, PROFILE)
+    assert all(p["contributions"]["age"] < n["contributions"]["age"] for n, p in zip(now, past))
+
+
+def test_measurement_year_fallbacks():
+    assert ps.measurement_year({"measured_at": "2023-07-28T00:00:00+00:00"}) == 2023
+    assert ps.measurement_year({"measured_at": None, "created_at": "2024-01-02T00:00:00Z"}) == 2024
+    assert ps.measurement_year({}) == date.today().year
+
+
+def test_minor_at_measurement_raises(models_dir):
+    with pytest.raises(ValueError, match="성인"):
+        ps.predict_all({**INBODY, "measured_at": f"{AGE35 + 18}-01-01"}, PROFILE)
+
+
+def test_contributions_cover_all_features(models_dir):
+    for r in ps.predict_all(INBODY, PROFILE):
+        assert set(r["contributions"]) == set(ps.FEATURES)

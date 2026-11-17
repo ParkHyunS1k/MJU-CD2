@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -63,6 +63,16 @@ def _check_range(name: str, value: float, bounds: tuple[float, float]) -> float:
     return value
 
 
+def measurement_year(inbody: dict) -> int:
+    """측정 연도. 측정일이 없으면 등록 시각, 그것도 없으면 오늘."""
+    value = inbody.get("measured_at") or inbody.get("created_at")
+    if not value:
+        return date.today().year
+    if isinstance(value, (date, datetime)):
+        return value.year
+    return int(str(value)[:4])
+
+
 def _inputs(inbody: dict, user_profile: dict) -> np.ndarray | None:
     gender = user_profile.get("gender")
     if not gender:
@@ -70,7 +80,8 @@ def _inputs(inbody: dict, user_profile: dict) -> np.ndarray | None:
     birth_year = user_profile.get("birth_year")
     if not birth_year:
         raise ValueError("출생연도 정보가 없습니다.")
-    age = date.today().year - int(birth_year)
+    # 측정 연도 기준 나이(설계 2026-11-15). 기록마다 그때 나이로 계산해야 위험도 추이가 실제 나이 변화를 반영한다
+    age = measurement_year(inbody) - int(birth_year)
     if age < MIN_AGE:
         raise ValueError("성인(19세 이상)만 위험도를 예측할 수 있습니다.")
 
@@ -100,7 +111,8 @@ def _risk_level(prob: float, bundle: dict) -> str:
 
 
 def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
-    """질환별 {disease, probability, risk_level, top_factors}. 필수 수치가 없으면 빈 리스트."""
+    """질환별 {disease, probability, risk_level, top_factors, contributions}. 필수 수치가 없으면 빈 리스트.
+    contributions는 입력 7개 전부의 로그 오즈 기여로, 두 기록의 위험도 변화를 요인별로 나누는 데 쓴다."""
     x = _inputs(inbody, user_profile)
     if x is None:
         return []
@@ -114,12 +126,14 @@ def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
         own = OWN_FAMILY_HISTORY[bundle["disease_key"]]
         if own in answered:
             shown.add(own)
+        contributions = _contributions(bundle, x)
         factors = [
             {"feature_kor": bundle["feat_kor"][f], "value": float(x[0, FEATURES.index(f)]),
              "shap_value": c, "direction": "up" if c > 0 else "down"}
-            for f, c in _contributions(bundle, x).items() if f in shown
+            for f, c in contributions.items() if f in shown
         ]
         factors.sort(key=lambda d: abs(d["shap_value"]), reverse=True)
         results.append({"disease": bundle["target"], "disease_key": bundle["disease_key"], "probability": prob,
-                        "risk_level": _risk_level(prob, bundle), "top_factors": factors[:TOP_K]})
+                        "risk_level": _risk_level(prob, bundle), "top_factors": factors[:TOP_K],
+                        "contributions": contributions})
     return results
