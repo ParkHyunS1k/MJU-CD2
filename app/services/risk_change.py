@@ -10,7 +10,7 @@ SMALL_CHANGE_PP = 1.0
 
 
 def _shares(change_pp: float, prev: dict, curr: dict) -> dict | None:
-    if abs(change_pp) < SMALL_CHANGE_PP:
+    if abs(round(change_pp, 1)) < SMALL_CHANGE_PP:  # 리포트에 보이는 반올림 값과 같은 기준
         return None
     deltas = {f: curr[f] - prev[f] for f in curr}
     total = sum(deltas.values())

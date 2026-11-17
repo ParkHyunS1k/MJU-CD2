@@ -39,3 +39,10 @@ def test_small_change_has_no_reason():
     now = _stored(0.302, 29.0, 26.0, {"age": 0.10, "bmi": 0.60, "body_fat_percentage": 0.21})
     r = compute(PREV, now, "2025-06-02")[0]
     assert r["change_pp"] == 0.2 and r["share_pp"] is None
+
+
+def test_threshold_uses_the_rounded_change():
+    # 실제 변화 -0.96%p는 -1.0으로 보이므로 '비슷함'이 아니다. 보이는 값과 같은 기준으로 몫을 낸다
+    now = _stored(0.2904, 26.0, 27.5, {"age": 0.15, "bmi": 0.25, "body_fat_percentage": 0.45})
+    r = compute(PREV, now, "2025-06-02")[0]
+    assert r["change_pp"] == -1.0 and r["share_pp"] is not None
