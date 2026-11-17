@@ -5,9 +5,13 @@
 
 SHARE_FEATURES = {"bmi": "BMI", "body_fat_percentage": "체지방률", "age": "나이"}
 _INPUTS = ("bmi", "body_fat_percentage")
+# 이보다 작은 변화는 '지난번과 비슷'으로 쓴다. 이때 몫은 반대 방향 요인끼리 상쇄된 큰 값일 수 있어 이유로 내지 않는다
+SMALL_CHANGE_PP = 1.0
 
 
 def _shares(change_pp: float, prev: dict, curr: dict) -> dict | None:
+    if abs(change_pp) < SMALL_CHANGE_PP:
+        return None
     deltas = {f: curr[f] - prev[f] for f in curr}
     total = sum(deltas.values())
     if abs(total) < 1e-9:  # 로그 오즈가 그대로면 나눌 몫이 없다

@@ -32,3 +32,10 @@ def test_zero_logodds_change_has_no_shares():
 def test_only_common_diseases_are_paired():
     other = _stored(0.2, 26.0, 27.5, {}, key="diabetes")
     assert compute(PREV, other, "2025-06-02") == []
+
+
+def test_small_change_has_no_reason():
+    # BMI·체지방률이 반대로 움직여 몫은 크지만 변화는 1.0%p 미만 → 이유를 내지 않는다
+    now = _stored(0.302, 29.0, 26.0, {"age": 0.10, "bmi": 0.60, "body_fat_percentage": 0.21})
+    r = compute(PREV, now, "2025-06-02")[0]
+    assert r["change_pp"] == 0.2 and r["share_pp"] is None

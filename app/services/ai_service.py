@@ -178,7 +178,8 @@ def generate_report(
         "user_profile": {k: user_profile.get(k) for k in ("gender", "birth_year", "fitness_goal")},
         "inbody_metrics": {k: _round(inbody_metrics.get(k), 2 if k == "abs_fat" else 1)
                            for k in _INBODY_METRIC_KEYS} if inbody_metrics else None,
-        "disease_risks": disease_risks,
+        # contributions는 변화 계산용이다. 설명에서 뺀 요인(성별, 답하지 않은 가족력)까지 들어 있어 GPT에 넘기지 않는다
+        "disease_risks": [{k: v for k, v in r.items() if k != "contributions"} for r in disease_risks],
         "trend_analysis": trend_analysis,
         "personal_metrics": personal_metrics,
         "risk_change": risk_change,

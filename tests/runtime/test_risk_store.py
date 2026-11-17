@@ -169,3 +169,18 @@ def test_risk_trend_route_registered_before_record_route():
     from main import app
     paths = list(app.openapi()["paths"])
     assert paths.index("/inbody/risk-trend") < paths.index("/inbody/{inbody_id}")
+
+
+def test_ensure_does_not_rewrite_uncomputable_record(monkeypatch):
+    monkeypatch.setattr(rs, "predict_all", lambda inbody, user_profile: [])
+    sb = FakeSB()
+    assert rs.ensure(sb, {**RECORD, rs.COLUMN: None}, PROFILE) is None
+    assert sb.updates == []
+
+
+def test_trend_falls_back_to_created_at(predict):
+    undated = {**RECORD, "id": "r0", "measured_at": None, "created_at": "2026-01-05T00:00:00+00:00"}
+    sb = FakeSB({"users": [{"id": "u1", **PROFILE}], "inbody_logs": [undated, RECORD]})
+    out = rs.trend(sb, "u1")
+    assert [(p["inbody_id"], p["measured_at"]) for p in out] == [
+        ("r1", RECORD["measured_at"]), ("r0", "2026-01-05T00:00:00+00:00")]

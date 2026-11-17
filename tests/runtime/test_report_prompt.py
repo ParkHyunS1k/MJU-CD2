@@ -160,3 +160,11 @@ def test_payload_includes_risk_change(monkeypatch):
     responses = _fake_openai(monkeypatch, [_report()])
     ai_service.generate_report([], {}, evidence=[], risk_change=[{"disease": "고혈압", "change_pp": -4.1}])
     assert '"change_pp": -4.1' in responses.calls[0]["input"]
+
+
+def test_contributions_do_not_reach_the_prompt(monkeypatch):
+    responses = _fake_openai(monkeypatch, [_report()])
+    risks = [{"disease": "당뇨", "disease_key": "diabetes", "probability": 0.2, "risk_level": "low",
+              "top_factors": [], "contributions": {"fh_diabetes": -0.31}}]
+    ai_service.generate_report(risks, {}, evidence=[])
+    assert "contributions" not in responses.calls[0]["input"]

@@ -61,7 +61,8 @@ def ensure(sb, record: dict, profile: dict) -> dict | None:
     if is_current(stored, record, profile):
         return stored
     value = compute(record, profile)
-    save(sb, record["id"], value)
+    if value != stored:  # 계산할 수 없는 기록(None)을 읽을 때마다 다시 쓰지 않는다
+        save(sb, record["id"], value)
     return value
 
 
@@ -91,10 +92,11 @@ def trend(sb, user_id: str) -> list[dict]:
         return []
     records = sb.table(TABLE).select("*").eq("user_id", user_id).order("measured_at").execute().data
     out = []
-    for record in sorted(records, key=lambda r: r.get("measured_at") or ""):
+    # 측정일이 없으면 나이 계산(measurement_year)과 같게 등록 시각으로 둔다
+    for record in sorted(records, key=lambda r: r.get("measured_at") or r.get("created_at") or ""):
         stored = ensure(sb, record, users[0])
         if stored:
-            out.append({"inbody_id": record["id"], "measured_at": record.get("measured_at"),
+            out.append({"inbody_id": record["id"], "measured_at": record.get("measured_at") or record.get("created_at"),
                         "risks": [{k: d[k] for k in ("disease", "disease_key", "probability", "risk_level")}
                                   for d in stored["diseases"]]})
     return out
