@@ -1,6 +1,9 @@
+import logging
+
 from app.core.supabase import get_supabase_admin
 from app.schemas.inbody import InBodyCreate, InBodyUpdate, InBodyUploadResponse
 from app.services.ai_service import extract_inbody_from_image
+from app.services.risk_store import refresh_record
 from app.services.storage_service import EXT_BY_MIME, delete_inbody_file, upload_inbody_file
 
 TABLE = "inbody_logs"
@@ -36,6 +39,9 @@ INBODY_VALUE_FIELDS = (
 )
 
 
+log = logging.getLogger(__name__)
+
+
 class InBodyServiceError(Exception):
     def __init__(self, status_code: int, detail: str):
         self.status_code = status_code
@@ -50,6 +56,7 @@ def create_inbody_record(user_id: str, payload: InBodyCreate) -> dict:
     res = sb.table(TABLE).insert(data).execute()
     if not res.data:
         raise InBodyServiceError(500, "Failed to create InBody record")
+    _refresh_risks(sb, res.data[0])
     return _normalize_record(res.data[0])
 
 
@@ -96,6 +103,7 @@ def update_inbody_record(user_id: str, inbody_id: str, payload: InBodyUpdate) ->
     )
     if not res.data:
         raise InBodyServiceError(404, "InBody record not found")
+    _refresh_risks(sb, res.data[0])
     return _normalize_record(res.data[0])
 
 
@@ -165,11 +173,20 @@ def create_inbody_from_upload(
         delete_inbody_file(image_path)
         raise InBodyServiceError(500, "Failed to create InBody record")
 
+    _refresh_risks(sb, res.data[0])
     return InBodyUploadResponse(
         record=_normalize_record(res.data[0]),
         extraction_confidence=extraction["confidence"],
         extraction_notes=extraction.get("notes"),
     )
+
+
+def _refresh_risks(sb, record: dict) -> None:
+    """기록 저장이 우선이라, 위험도 저장이 실패해도 요청은 성공시킨다."""
+    try:
+        refresh_record(sb, record)
+    except Exception:
+        log.exception("failed to refresh risks for record %s", record.get("id"))
 
 
 def _normalize_record(record: dict) -> dict:

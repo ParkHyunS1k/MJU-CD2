@@ -39,6 +39,8 @@ def table(monkeypatch):
     t = FakeTable({"id": "u1", "created_at": "2026-10-12T00:00:00+00:00", "nickname": "a",
                    "gender": "male", "birth_year": 1990, "fitness_goal": None})
     monkeypatch.setattr(users, "get_supabase_admin", lambda: SimpleNamespace(table=lambda _: t))
+    t.refreshed = []
+    monkeypatch.setattr(users, "refresh_user", lambda sb, user_id, profile: t.refreshed.append((user_id, profile)))
     return t
 
 
@@ -62,3 +64,10 @@ def test_patch_empty_body_rejected(table):
 def test_response_defaults_family_history_to_none(table):
     r = UserResponse.model_validate(users.get_me(CURRENT))
     assert (r.fh_hypertension, r.fh_diabetes, r.fh_dyslipidemia) == (None, None, None)
+
+
+def test_patch_refreshes_risks_only_for_risk_fields(table):
+    users.update_me(UserUpdate(nickname="b"), CURRENT)
+    assert table.refreshed == []
+    users.update_me(UserUpdate(fh_diabetes=True), CURRENT)
+    assert table.refreshed == [("u1", table.row)]
