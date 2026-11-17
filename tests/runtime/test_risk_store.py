@@ -135,3 +135,37 @@ def test_refresh_user_updates_every_record(predict):
     sb = FakeSB({"inbody_logs": [RECORD, {**RECORD, "id": "r2"}]})
     rs.refresh_user(sb, "u1", PROFILE)
     assert [u[2]["id"] for u in sb.updates] == ["r1", "r2"]
+
+
+def test_trend_orders_by_date_and_drops_uncomputable(monkeypatch):
+    def fake(inbody, user_profile):
+        return [] if inbody["id"] == "bad" else PRED
+
+    monkeypatch.setattr(rs, "predict_all", fake)
+    later = {**RECORD, "id": "r2", "measured_at": "2025-09-01T00:00:00+00:00"}
+    bad = {**RECORD, "id": "bad", "measured_at": "2025-07-01T00:00:00+00:00"}
+    sb = FakeSB({"users": [{"id": "u1", **PROFILE}], "inbody_logs": [later, bad, RECORD]})
+    out = rs.trend(sb, "u1")
+    assert [p["inbody_id"] for p in out] == ["r1", "r2"]
+    assert out[0]["measured_at"] == RECORD["measured_at"]
+
+
+def test_trend_has_no_contributions(predict):
+    sb = FakeSB({"users": [{"id": "u1", **PROFILE}], "inbody_logs": [RECORD]})
+    assert rs.trend(sb, "u1")[0]["risks"] == [
+        {"disease": "고혈압", "disease_key": "hypertension", "probability": 0.3, "risk_level": "medium"}]
+
+
+def test_trend_without_user_is_empty():
+    assert rs.trend(FakeSB(), "u1") == []
+
+
+def test_backfill_counts_records(predict):
+    sb = FakeSB({"users": [{"id": "u1", **PROFILE}], "inbody_logs": [RECORD, {**RECORD, "id": "r2"}]})
+    assert rs.backfill(sb) == 2 and len(sb.updates) == 2
+
+
+def test_risk_trend_route_registered_before_record_route():
+    from main import app
+    paths = list(app.openapi()["paths"])
+    assert paths.index("/inbody/risk-trend") < paths.index("/inbody/{inbody_id}")

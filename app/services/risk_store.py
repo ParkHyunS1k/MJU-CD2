@@ -76,7 +76,36 @@ def refresh_record(sb, record: dict, profile: dict | None = None) -> None:
         log.exception("failed to refresh risks for record %s", record.get("id"))
 
 
-def refresh_user(sb, user_id: str, profile: dict) -> None:
+def refresh_user(sb, user_id: str, profile: dict) -> int:
+    """그 사용자의 기록 수를 돌려준다."""
     res = sb.table(TABLE).select("*").eq("user_id", user_id).execute()
     for record in res.data:
         refresh_record(sb, record, profile)
+    return len(res.data)
+
+
+def trend(sb, user_id: str) -> list[dict]:
+    """측정일 오름차순으로 기록별 위험도. 계산할 수 없는 기록은 뺀다."""
+    users = sb.table("users").select("*").eq("id", user_id).limit(1).execute().data
+    if not users:
+        return []
+    records = sb.table(TABLE).select("*").eq("user_id", user_id).order("measured_at").execute().data
+    out = []
+    for record in sorted(records, key=lambda r: r.get("measured_at") or ""):
+        stored = ensure(sb, record, users[0])
+        if stored:
+            out.append({"inbody_id": record["id"], "measured_at": record.get("measured_at"),
+                        "risks": [{k: d[k] for k in ("disease", "disease_key", "probability", "risk_level")}
+                                  for d in stored["diseases"]]})
+    return out
+
+
+def backfill(sb) -> int:
+    """모든 사용자의 기록을 다시 계산해 저장한다. 처리한 기록 수."""
+    return sum(refresh_user(sb, user["id"], user) for user in sb.table("users").select("*").execute().data)
+
+
+if __name__ == "__main__":
+    from app.core.supabase import get_supabase_admin
+
+    print(f"{backfill(get_supabase_admin())} records refreshed")

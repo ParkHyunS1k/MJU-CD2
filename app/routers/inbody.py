@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 
+from app.core.supabase import get_supabase_admin
 from app.deps.auth import CurrentUser, get_current_user
 from app.schemas.inbody import (
     InBodyCreate,
@@ -18,6 +19,7 @@ from app.services.inbody_service import (
     update_inbody_record,
     validate_upload,
 )
+from app.services.risk_store import trend as risk_trend
 from app.services.trend_analysis_service import analyze_trend
 
 router = APIRouter(prefix="/inbody", tags=["inbody"])
@@ -52,6 +54,14 @@ def get_inbody_trend(
 ):
     """로그인한 사용자의 전체 측정 기록으로 변화 추세를 계산한다."""
     return analyze_trend(current.id)
+
+
+@router.get("/risk-trend")
+def get_risk_trend(
+    current: CurrentUser = Depends(get_current_user),
+):
+    """기록별 질환 위험도(측정일 오름차순). 위험도 추이 그래프용."""
+    return risk_trend(get_supabase_admin(), current.id)
 
 
 @router.get("/{inbody_id}", response_model=InBodyResponse)
