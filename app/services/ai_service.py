@@ -102,6 +102,9 @@ _REPORT_GUIDE = (
     "- summary: title 20자 이내, overall_message 120자 이내, key_focus 2~3개\n"
     "- body_composition_report: strengths 최대 2개, watch_points 최대 3개. 각 message는 80자 이내. 결핍 진단은 금지\n"
     "- risk_report: disease_risks를 사용자 친화적으로 재구성. message는 100자 이내, main_factors는 최대 3개\n"
+    "- risk_change가 있으면 risk_report의 각 message에 직전 측정 대비 변화(change_pp)와 가장 큰 share_pp 요인을 한 번 쓰세요"
+    "(사용자 데이터라 인용하지 않음). |change_pp|가 1.0 미만이면 '지난번과 비슷'으로 쓰세요. "
+    "'나이' 몫은 나이가 들며 자연히 늘어난 몫으로 구분해 쓰고 몸의 변화와 섞지 마세요. share_pp가 null이면 이유를 쓰지 마세요\n"
     "- lifestyle_plan: 1~5개(근거가 충분하면 3개 이상). 각 reason에는 반드시 실제 수치, 위험도, SHAP 요인, 추세 중 하나를 명시하세요(사용자 데이터라 인용하지 않음). "
     "actions는 [근거]에 있는 권고로 쓰고 그 근거의 S번호를 source_ids에 넣으세요. "
     "risk_level이 high인 질환마다 그 질환을 다루는 항목을 최소 1개 두세요. "
@@ -162,6 +165,7 @@ def generate_report(
     evidence: list["Evidence"] | None = None,
     previous_report: dict | None = None,
     personal_metrics: dict | None = None,
+    risk_change: list[dict] | None = None,
 ) -> dict:
     """ML 예측 결과와 유저 프로필을 받아 구조화된 생활습관 리포트를 생성한다.
     trend_analysis가 있으면 시계열 추세도 반영한다.
@@ -177,6 +181,7 @@ def generate_report(
         "disease_risks": disease_risks,
         "trend_analysis": trend_analysis,
         "personal_metrics": personal_metrics,
+        "risk_change": risk_change,
     }
     prompt = build_report_prompt(payload, evidence or [], previous_report)
 

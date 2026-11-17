@@ -149,3 +149,14 @@ def test_segmental_rules():
 def test_guide_prefers_trait_evidence():
     guide = ai_service._REPORT_GUIDE
     assert "특성 근거" in guide and "일반 근거보다" in guide
+
+
+def test_guide_has_risk_change_rule():
+    guide = ai_service._REPORT_GUIDE
+    assert "risk_change" in guide and "1.0" in guide and "나이" in guide and "share_pp" in guide
+
+
+def test_payload_includes_risk_change(monkeypatch):
+    responses = _fake_openai(monkeypatch, [_report()])
+    ai_service.generate_report([], {}, evidence=[], risk_change=[{"disease": "고혈압", "change_pp": -4.1}])
+    assert '"change_pp": -4.1' in responses.calls[0]["input"]

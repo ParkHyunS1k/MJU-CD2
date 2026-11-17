@@ -1,6 +1,7 @@
 import logging
 
 from app.core.supabase import get_supabase_admin
+from app.services import risk_change, risk_store
 from app.schemas.inbody import HealthReport
 from app.services.ai_service import generate_report
 from app.services.citation_service import validate_citations
@@ -74,6 +75,13 @@ def _analyze_inbody_record(
             "인바디 수치가 부족해 위험도를 계산할 수 없습니다. 수치를 보완 후 다시 시도하세요.",
         )
 
+    # 대상 기록은 오류 메시지를 지키려고 직접 계산한다. 같은 결정적 계산이라 저장값과 같고, 낡았으면 이 값으로 바꿔 둔다
+    current = risk_store.from_predictions(target, user, disease_risks)
+    if not risk_store.is_current(target.get(risk_store.COLUMN), target, user):
+        risk_store.save(sb, target["id"], current)
+    previous = _previous_risks(sb, user, records, target)
+    changes = risk_change.compute(previous[1], current, previous[0]["measured_at"]) if previous else None
+
     trend_analysis = _build_trend_analysis(records, disease_risks)
 
     metrics = compute_personal_metrics(target, user)
@@ -98,6 +106,7 @@ def _analyze_inbody_record(
             evidence=evidence,
             previous_report=_previous_report_summary(records, target),
             personal_metrics=metrics,
+            risk_change=changes,
         )
     except ValueError as e:
         raise AnalysisServiceError(502, str(e)) from e
@@ -141,6 +150,18 @@ def _list_inbody_records(sb, user_id: str) -> list[dict]:
         .execute()
     )
     return res.data
+
+
+def _previous_risks(sb, user: dict, records: list[dict], target: dict) -> tuple[dict, dict] | None:
+    """대상보다 먼저 측정했고 위험도를 계산할 수 있는 가장 최근 기록과 그 저장값. 리포트 유무는 보지 않는다."""
+    measured = target.get("measured_at") or ""
+    earlier = sorted((r for r in records if r.get("measured_at") and r["measured_at"] < measured),
+                     key=lambda r: r["measured_at"], reverse=True)
+    for record in earlier:
+        stored = risk_store.ensure(sb, record, user)
+        if stored:
+            return record, stored
+    return None
 
 
 def _previous_report_summary(records: list[dict], target: dict) -> dict | None:

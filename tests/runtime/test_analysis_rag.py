@@ -7,8 +7,10 @@ USER = {"id": "u1", "gender": "male", "birth_year": 1990}
 TARGET = {"id": "r2", "measured_at": "2026-10-10T00:00:00+00:00", "bmi": 27.0, "image_url": "img.png"}
 OLDER = {"id": "r1", "measured_at": "2026-09-01T00:00:00+00:00",
          "ai_report": {"summary": {"key_focus": ["체중"]}, "lifestyle_plan": [{"title": "식단"}]}}
+CONTRIB = {"age": 0.1, "female": 0.0, "bmi": 0.2, "body_fat_percentage": 0.3,
+           "fh_hypertension": 0.0, "fh_diabetes": 0.0, "fh_dyslipidemia": 0.0}
 RISKS = [{"disease": "고혈압", "disease_key": "hypertension", "probability": 0.4, "risk_level": "high",
-          "top_factors": []}]
+          "top_factors": [], "contributions": CONTRIB}]
 EV = Evidence(sid="S1", chunk_id=1, document_id="d", title="고혈압 진료지침", publisher="학회", year=2026, url=None,
               heading_path=None, page_start=74, page_end=74, content="본문", similarity=0.8,
               condition="hypertension", category="diet")
@@ -26,6 +28,8 @@ def wired(monkeypatch):
     monkeypatch.setattr(svc, "predict_all", lambda inbody, user_profile: RISKS)
     monkeypatch.setattr(svc, "_build_trend_analysis", lambda records, risks: None)
     monkeypatch.setattr(svc, "_save_report_and_cleanup_image", lambda sb, t, r: calls.__setitem__("saved", r))
+    monkeypatch.setattr(svc.risk_store, "save", lambda sb, record_id, value: None)
+    monkeypatch.setattr(svc.risk_store, "ensure", lambda sb, record, profile: None)
 
     def fake_generate(**kw):
         calls["generate"] = kw
@@ -90,3 +94,32 @@ def test_previous_summary_ignores_records_without_measured_at():
     undated = {"id": "rx", "measured_at": None, "ai_report": {"summary": {"key_focus": ["날짜 없음"]}}}
     assert svc._previous_report_summary([TARGET, undated, OLDER], TARGET)["key_focus"] == ["체중"]
     assert svc._previous_report_summary([TARGET, undated], TARGET) is None
+
+
+def _stored(p):
+    return {"inputs": {"bmi": 28.0, "body_fat_percentage": 30.0}, "age": 35,
+            "diseases": [{"disease": "고혈압", "disease_key": "hypertension", "probability": p, "risk_level": "high",
+                          "contributions": {**CONTRIB, "body_fat_percentage": 0.5}}]}
+
+
+def test_report_gets_risk_change_from_previous_record(wired, monkeypatch):
+    monkeypatch.setattr(svc, "retrieve", lambda queries: [EV])
+    monkeypatch.setattr(svc.risk_store, "ensure", lambda sb, record, profile: _stored(0.45))
+    svc._analyze_inbody_record(None, USER, [TARGET, OLDER], TARGET)
+    change = wired["generate"]["risk_change"][0]
+    assert change["change_pp"] == -5.0 and change["previous_measured_at"] == "2026-09-01"
+
+
+def test_previous_skips_uncomputable_records(wired, monkeypatch):
+    monkeypatch.setattr(svc, "retrieve", lambda queries: [EV])
+    oldest = {"id": "r0", "measured_at": "2026-08-01T00:00:00+00:00"}
+    monkeypatch.setattr(svc.risk_store, "ensure",
+                        lambda sb, record, profile: _stored(0.45) if record["id"] == "r0" else None)
+    svc._analyze_inbody_record(None, USER, [TARGET, OLDER, oldest], TARGET)
+    assert wired["generate"]["risk_change"][0]["previous_measured_at"] == "2026-08-01"
+
+
+def test_first_record_has_no_risk_change(wired, monkeypatch):
+    monkeypatch.setattr(svc, "retrieve", lambda queries: [EV])
+    svc._analyze_inbody_record(None, USER, [TARGET], TARGET)
+    assert wired["generate"]["risk_change"] is None
