@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -15,6 +15,8 @@ const SEARCH_LIMIT = 20;
 // 하단 "리포트" 탭: 리포트가 있는 기록 중 가장 최근 것을 보여 준다.
 // (가장 최근 기록 하나만 보면, 분석하지 않은 기록이 끼어 있을 때 리포트가 없다고 나오는 문제가 있었다)
 export default function ReportTabScreen() {
+  // 리포트 탭은 기록 탭과 다른 화면 묶음이라, 위험도 상세는 기록 탭(Records) 안에서 연다
+  const navigation = useNavigation<any>();
   const [record, setRecord] = useState<InBodyRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +76,17 @@ export default function ReportTabScreen() {
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       {header}
       <View style={styles.body}>
-        <ReportView report={record.ai_report} dateLabel={formatDate(record.measured_at)} />
+        <ReportView
+          report={record.ai_report}
+          dateLabel={formatDate(record.measured_at)}
+          onPressDisease={(disease) =>
+            navigation.navigate('Records', {
+              screen: 'RiskScreen',
+              params: { id: record.id, disease },
+              initial: false,
+            })
+          }
+        />
       </View>
     </ScrollView>
   );

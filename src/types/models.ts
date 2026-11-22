@@ -32,6 +32,13 @@ export interface DiseaseRisk {
   top_factors: { feature_kor: string; value: number; shap_value: number; direction: 'up' | 'down' }[];
 }
  
+// GET /inbody/risk-trend: 기록별 질환 위험도 (측정일 오름차순)
+export interface RiskTrendPoint {
+  inbody_id: string;
+  measured_at: string;
+  risks: { disease: string; disease_key: string; probability: number; risk_level: RiskLevel }[];
+}
+
 export interface ReportSummary {
   title: string;
   overall_message: string;

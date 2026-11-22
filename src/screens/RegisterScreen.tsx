@@ -14,9 +14,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import SocialLoginButton from '../components/SocialLoginButton';
 import { useAuth } from '../contexts/AuthContext';
+import { friendlyAuthError } from '../lib/errors';
 import type { AuthStackParamList } from '../navigation/types';
+
+// 민감정보 별도 동의 안내 (개인정보 보호법 제23조, 처리방침 2~4번과 내용을 맞춤)
+const HEALTH_CONSENT_DETAIL = [
+  '• 수집 항목: 인바디 측정 수치(체중, 골격근량, 체지방률, BMI 등), 결과지 사진, 건강 설문(성별, 출생연도, 가족력)',
+  '• 이용 목적: 고혈압·당뇨·고콜레스테롤·고중성지방 위험도 추정, 건강 리포트 제공, 측정 기록 변화 분석',
+  '• 보유 기간: 회원 탈퇴 시까지 (결과지 사진은 분석 후 바로 삭제)',
+  '• 동의를 거부할 수 있지만, 이 서비스는 건강정보로 위험도를 분석하는 서비스라 거부하면 가입할 수 없어요.',
+  '',
+  '자세한 내용은 설정 → 개인정보 처리방침에서 볼 수 있어요.',
+].join('\n');
 
 type NavProp = NativeStackNavigationProp<AuthStackParamList>;
 
@@ -40,12 +50,13 @@ export default function RegisterScreen() {
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [agreedHealth, setAgreedHealth] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const passwordValid = PASSWORD_RULES.every((r) => r.test(password));
   const passwordsMatch = confirmPw.length > 0 && password === confirmPw;
   const canSubmit =
-    agreed && !busy && !!name.trim() && !!email.trim() && passwordValid && passwordsMatch;
+    agreed && agreedHealth && !busy && !!name.trim() && !!email.trim() && passwordValid && passwordsMatch;
 
   const onRegister = async () => {
     if (!name || !email || !password || !confirmPw) {
@@ -61,8 +72,8 @@ export default function RegisterScreen() {
       Alert.alert('비밀번호가 일치하지 않습니다.');
       return;
     }
-    if (!agreed) {
-      Alert.alert('이용약관에 동의해주세요.');
+    if (!agreed || !agreedHealth) {
+      Alert.alert('필수 항목에 모두 동의해 주세요.');
       return;
     }
     setBusy(true);
@@ -70,8 +81,7 @@ export default function RegisterScreen() {
       await signUp(email.trim(), password);
       Alert.alert('가입 완료', '이메일 확인이 필요할 수 있습니다.');
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : '가입에 실패했습니다.';
-      Alert.alert('실패', message);
+      Alert.alert('가입 실패', friendlyAuthError(e, '가입에 실패했어요. 다시 시도해 주세요.'));
     } finally {
       setBusy(false);
     }
@@ -164,13 +174,30 @@ export default function RegisterScreen() {
           )}
 
           <TouchableOpacity
-            style={styles.termsRow}
+            style={[styles.termsRow, styles.termsRowFirst]}
             onPress={() => setAgreed(!agreed)}
           >
             <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
               {agreed && <Ionicons name="checkmark" size={12} color="#fff" />}
             </View>
-            <Text style={styles.termsText}>이용약관 및 개인정보처리방침에 동의합니다</Text>
+            <Text style={styles.termsText}>(필수) 이용약관 및 개인정보처리방침에 동의합니다</Text>
+          </TouchableOpacity>
+
+          {/* 개인정보 보호법 제23조: 건강정보(민감정보)는 다른 동의와 구분해 별도로 동의받는다 (처리방침 3번) */}
+          <TouchableOpacity
+            style={styles.termsRow}
+            onPress={() => setAgreedHealth(!agreedHealth)}
+          >
+            <View style={[styles.checkbox, agreedHealth && styles.checkboxChecked]}>
+              {agreedHealth && <Ionicons name="checkmark" size={12} color="#fff" />}
+            </View>
+            <Text style={styles.termsText}>(필수) 건강정보(민감정보) 수집·이용에 동의합니다</Text>
+            <TouchableOpacity
+              onPress={() => Alert.alert('건강정보(민감정보) 수집·이용 동의', HEALTH_CONSENT_DETAIL)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.termsDetail}>보기</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -180,21 +207,6 @@ export default function RegisterScreen() {
           >
             <Text style={styles.primaryButtonText}>가입하기</Text>
           </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>또는</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <SocialLoginButton
-            provider="kakao"
-            label="카카오 로그인"
-          />
-          <SocialLoginButton
-            provider="google"
-            label="Google 로그인"
-          />
 
           <View style={styles.loginRow}>
             <Text style={styles.loginText}>이미 계정이 있으신가요? </Text>
@@ -314,10 +326,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#00C2A8',
     borderColor: '#00C2A8',
   },
+  termsRowFirst: {
+    marginBottom: 8,
+  },
   termsText: {
     fontSize: 13,
     color: '#555',
     flex: 1,
+  },
+  termsDetail: {
+    fontSize: 13,
+    color: '#999',
+    textDecorationLine: 'underline',
+    marginLeft: 8,
   },
 
   primaryButton: {
@@ -334,21 +355,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E5E5',
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 13,
-    color: '#AAAAAA',
-  },
 
   loginRow: {
     flexDirection: 'row',

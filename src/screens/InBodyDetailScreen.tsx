@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import { api } from '../lib/api';
+import { ApiError } from '../lib/errors';
 import type { InBodyStackParamList } from '../navigation/types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { InBodyRecord } from '../types/models';
@@ -47,17 +48,28 @@ export default function InBodyDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
+  // 기록 탭을 목록 화면만 남긴 상태로 되돌린다.
+  // 홈에서 바로 상세로 들어온 경우 goBack()은 홈 탭으로 가 버리고, 이 화면이 기록 탭에 남아 있게 된다.
+  const backToList = useCallback(() => {
+    nav.reset({ index: 0, routes: [{ name: 'InBodyList' }] });
+  }, [nav]);
+
   const load = useCallback(async () => {
     try {
       const data = await api.getInBody(id);
       setRecord(data);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : '불러오기 실패';
+      if (e instanceof ApiError && e.status === 404) {
+        // 이미 삭제된 기록: 오류 알림을 반복하지 않고 목록으로 돌아간다
+        backToList();
+        return;
+      }
       Alert.alert('오류', message);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, backToList]);
 
   useFocusEffect(
     useCallback(() => {
@@ -75,7 +87,7 @@ export default function InBodyDetailScreen() {
           setDeleting(true);
           try {
             await api.deleteInBody(id);
-            nav.goBack();
+            backToList();
           } catch (e: unknown) {
             const message = e instanceof Error ? e.message : '삭제 실패';
             Alert.alert('오류', message);

@@ -105,6 +105,7 @@ export default function HomeScreen() {
                 onPress={() => navigation.navigate('Records', {
                   screen: 'InBodyDetail',
                   params: { id: latest.id },
+                  initial: false, // 기록 목록을 아래에 깔아 두어 뒤로 가기가 목록으로 가게 한다
                 })}
               >
                 <Text style={styles.resultBtnText}>분석 결과{'\n'}보기</Text>
@@ -124,7 +125,7 @@ export default function HomeScreen() {
         </Text>
         <TouchableOpacity
           style={styles.uploadBtn}
-          onPress={() => navigation.navigate('Records', { screen: 'InBodyUpload' })}
+          onPress={() => navigation.navigate('Records', { screen: 'InBodyUpload', initial: false })}
         >
           <Text style={styles.uploadBtnText}>파일 업로드 시작</Text>
         </TouchableOpacity>
@@ -141,6 +142,7 @@ export default function HomeScreen() {
               onPress={() => navigation.navigate('Records', {
                 screen: 'InBodyDetail',
                 params: { id: rec.id },
+                initial: false,
               })}
             >
               <View>

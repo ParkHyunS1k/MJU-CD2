@@ -26,7 +26,6 @@ const ITEMS: Item[] = [
     sub: '이름, 나이, 목표 설정',
     go: (n) => n.navigate('ProfileEdit'),
   },
-  { icon: 'notifications-outline', label: '알림 설정', sub: '건강 리마인더' },
   {
     icon: 'shield-checkmark-outline',
     label: '개인정보 처리방침',

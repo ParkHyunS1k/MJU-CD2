@@ -1,5 +1,3 @@
-import type { DiseaseRisk } from '../types/models';
-
 export type AuthStackParamList = {
   Landing: undefined;
   Login: undefined;
@@ -13,7 +11,7 @@ export type InBodyStackParamList = {
   InBodyUpload: undefined;
   InBodyReview: { id: string; confidence: number; notes: string | null };
   AnalysisScreen: { id: string };
-  RiskScreen: { id: string; risks: DiseaseRisk[] };
+  RiskScreen: { id: string; disease: string }; // id: 보고 있던 기록, disease: 질환 이름(예: 고혈압)
   ReportScreen: { id: string };
 };
 

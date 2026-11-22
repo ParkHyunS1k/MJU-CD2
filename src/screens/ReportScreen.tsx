@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import ReportView from '../components/report/ReportView';
@@ -20,6 +21,7 @@ export function formatDate(dateStr: string | null): string {
 // 기록 상세 → "AI 리포트 보기", 또는 분석 직후에 열리는 리포트 화면
 export default function ReportScreen() {
   const { id } = useRoute<Rt>().params;
+  const nav = useNavigation<NativeStackNavigationProp<InBodyStackParamList, 'ReportScreen'>>();
   const [record, setRecord] = useState<InBodyRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,7 +56,11 @@ export default function ReportScreen() {
       // iOS에서 상단 제목 줄 밑으로 내용이 가려지지 않게 한다
       contentInsetAdjustmentBehavior="automatic"
     >
-      <ReportView report={record.ai_report} dateLabel={formatDate(record.measured_at)} />
+      <ReportView
+        report={record.ai_report}
+        dateLabel={formatDate(record.measured_at)}
+        onPressDisease={(disease) => nav.navigate('RiskScreen', { id, disease })}
+      />
     </ScrollView>
   );
 }

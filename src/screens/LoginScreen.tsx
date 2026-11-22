@@ -14,8 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import SocialLoginButton from '../components/SocialLoginButton';
 import { useAuth } from '../contexts/AuthContext';
+import { friendlyAuthError } from '../lib/errors';
 import type { AuthStackParamList } from '../navigation/types';
 
 type NavProp = NativeStackNavigationProp<AuthStackParamList>;
@@ -39,8 +39,7 @@ export default function LoginScreen() {
     try {
       await signIn(email.trim(), password);
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : '로그인에 실패했습니다.';
-      Alert.alert('실패', message);
+      Alert.alert('로그인 실패', friendlyAuthError(e, '로그인에 실패했어요. 다시 시도해 주세요.'));
     } finally {
       setBusy(false);
     }
@@ -108,21 +107,6 @@ export default function LoginScreen() {
           >
             <Text style={styles.primaryButtonText}>로그인</Text>
           </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>또는</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <SocialLoginButton
-            provider="kakao"
-            label="카카오 로그인"
-          />
-          <SocialLoginButton
-            provider="google"
-            label="Google 로그인"
-          />
 
           <View style={styles.signupRow}>
             <Text style={styles.signupText}>계정이 없으신가요? </Text>
@@ -259,21 +243,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E5E5',
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 13,
-    color: '#AAAAAA',
-  },
 
   signupRow: {
     flexDirection: 'row',

@@ -28,7 +28,7 @@ import type {
 const TEAL = '#00C2A8';
 const SOURCES_PREVIEW = 5; // 출처가 많으면 처음엔 이만큼만 보여 준다
 
-const RISK: Record<RiskLevel, { label: string; color: string; bg: string; rank: number }> = {
+export const RISK: Record<RiskLevel, { label: string; color: string; bg: string; rank: number }> = {
   low: { label: '낮음', color: '#00897B', bg: '#E0F2F1', rank: 0 },
   medium: { label: '주의', color: '#EF6C00', bg: '#FFF3E0', rank: 1 },
   high: { label: '높음', color: '#C62828', bg: '#FFEBEE', rank: 2 },
@@ -142,11 +142,13 @@ function RiskCard({
   factors,
   sources,
   highlighted,
+  onPress,
 }: {
   risk: RiskReportItem;
   factors: DiseaseRisk['top_factors'];
   sources: SourceMap;
   highlighted: boolean;
+  onPress?: () => void;
 }) {
   const cfg = RISK[risk.risk_level];
   const pct = Math.min(Math.max(risk.probability * 100, 0), 100);
@@ -179,6 +181,13 @@ function RiskCard({
             </View>
           ))}
         </View>
+      )}
+      {onPress && (
+        <TouchableOpacity style={styles.moreRow} onPress={onPress} accessibilityRole="button">
+          <Ionicons name="trending-up-outline" size={16} color="#00A38D" />
+          <Text style={styles.moreRowText}>위험도 추이 자세히 보기</Text>
+          <Ionicons name="chevron-forward" size={16} color="#00A38D" />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -247,25 +256,41 @@ function Supplement({ item, sources }: { item: SupplementCandidate; sources: Sou
 const CHART_HEIGHT = 70;
 
 // 별도 차트 라이브러리 없이 점과 선(회전한 View)으로 그리는 작은 꺾은선 그래프
-function MiniLineChart({ values, color }: { values: number[]; color: string }) {
+// highlightIndex: 속을 채워 강조할 점 (예: 지금 보고 있는 측정)
+export function MiniLineChart({
+  values,
+  color,
+  height = CHART_HEIGHT,
+  highlightIndex,
+  yMin,
+  yMax,
+}: {
+  values: number[];
+  color: string;
+  height?: number;
+  highlightIndex?: number;
+  // 세로축 범위를 고정한다. 안 주면 값의 최소~최대에 맞춰 늘린다(작은 변화도 크게 보임)
+  yMin?: number;
+  yMax?: number;
+}) {
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
   const points = useMemo(() => {
     if (width === 0 || values.length === 0) return [];
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+    const min = yMin ?? Math.min(...values);
+    const max = yMax ?? Math.max(...values);
     const range = max - min || 1;
     const pad = 6;
     const stepX = values.length > 1 ? (width - pad * 2) / (values.length - 1) : 0;
     return values.map((v, i) => ({
       x: pad + i * stepX,
-      y: pad + (1 - (v - min) / range) * (CHART_HEIGHT - pad * 2),
+      y: pad + (1 - (v - min) / range) * (height - pad * 2),
     }));
-  }, [values, width]);
+  }, [values, width, height, yMin, yMax]);
 
   return (
-    <View style={styles.chart} onLayout={onLayout}>
+    <View style={[styles.chart, { height }]} onLayout={onLayout}>
       {points.slice(1).map((p, i) => {
         const a = points[i];
         const dx = p.x - a.x;
@@ -291,7 +316,11 @@ function MiniLineChart({ values, color }: { values: number[]; color: string }) {
       {points.map((p, i) => (
         <View
           key={`d${i}`}
-          style={[styles.chartDot, { borderColor: color, left: p.x - 4, top: p.y - 4 }]}
+          style={[
+            styles.chartDot,
+            { borderColor: color, left: p.x - 4, top: p.y - 4 },
+            i === highlightIndex && { backgroundColor: color },
+          ]}
         />
       ))}
     </View>
@@ -366,7 +395,16 @@ function SourceList({ sources }: { sources: SourceRef[] }) {
 
 // ---------- 전체 ----------
 
-export default function ReportView({ report, dateLabel }: { report: AIReport; dateLabel: string }) {
+export default function ReportView({
+  report,
+  dateLabel,
+  onPressDisease,
+}: {
+  report: AIReport;
+  dateLabel: string;
+  // 질환 카드를 눌렀을 때 (위험도 상세 화면으로 이동)
+  onPressDisease?: (disease: string) => void;
+}) {
   const sources = report.sources ?? [];
   const sourceMap = useMemo<SourceMap>(
     () => Object.fromEntries(sources.map((s) => [s.sid, s])),
@@ -412,6 +450,7 @@ export default function ReportView({ report, dateLabel }: { report: AIReport; da
             factors={factorsOf(r.disease)}
             sources={sourceMap}
             highlighted={top?.disease === r.disease && r.risk_level !== 'low'}
+            onPress={onPressDisease ? () => onPressDisease(r.disease) : undefined}
           />
         ))}
         {(body.watch_points.length > 0 || body.strengths.length > 0) && (
@@ -584,6 +623,17 @@ const styles = StyleSheet.create({
   sourceSid: { fontSize: 12, fontWeight: '700', color: '#00A38D', width: 34 },
   sourceTitle: { fontSize: 13, color: '#1A1A1A', lineHeight: 19 },
   sourceLink: { fontSize: 12, color: '#00A38D', fontWeight: '600' },
+  moreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F2F2F2',
+  },
+  moreRowText: { fontSize: 13, fontWeight: '600', color: '#00A38D' },
   moreButton: { paddingVertical: 10, alignItems: 'center' },
   moreText: { fontSize: 13, fontWeight: '600', color: '#00A38D' },
 
