@@ -8,6 +8,11 @@ def _rec(h, doc="a"):
             "page_end": 1, "conditions": ["hypertension"], "category": "diet"}
 
 
+def _row(h, doc="a"):  # DB에 저장된 모양: doc_id 대신 document_id, 본문 대신 임베딩
+    r = {k: v for k, v in _rec(h, doc).items() if k not in ("doc_id", "content")}
+    return {**r, "document_id": doc, "embedding": "[keep]"}
+
+
 class FakeQuery:
     def __init__(self, db, name):
         self.db, self.name, self.op, self.payload, self.filter = db, name, "select", None, None
@@ -32,6 +37,14 @@ class FakeQuery:
         self.op = "delete"
         return self
 
+    def update(self, values):
+        self.op, self.payload = "update", values
+        return self
+
+    def eq(self, column, value):
+        self.filter = (column, {value})
+        return self
+
     def in_(self, column, values):
         self.filter = (column, set(values))
         return self
@@ -45,6 +58,11 @@ class FakeQuery:
             key = "id" if self.name == "rag_documents" else "content_hash"
             keep = [r for r in rows if r[key] not in {p[key] for p in self.payload}]
             self.db[self.name] = keep + list(self.payload)
+        if self.op == "update":
+            col, vals = self.filter
+            for r in rows:
+                if r[col] in vals:
+                    r.update(self.payload)
         if self.op == "delete":
             col, vals = self.filter
             self.db[self.name] = [r for r in rows if r[col] not in vals]
@@ -68,7 +86,7 @@ def test_plan_sync_adds_new_and_deletes_missing():
 
 
 def test_sync_embeds_only_new_chunks_and_removes_stale_documents():
-    sb = FakeSB(chunks=[{"content_hash": "2", "document_id": "a"}, {"content_hash": "9", "document_id": "old"}],
+    sb = FakeSB(chunks=[_row("2"), _row("9", "old")],
                 docs=[{"id": "old"}])
     embedded = []
 
@@ -78,7 +96,7 @@ def test_sync_embeds_only_new_chunks_and_removes_stale_documents():
         return [[0.1] * 768 for _ in texts]
 
     stats = load.sync(sb, [_rec("1"), _rec("2")], SOURCES, fake_embed)
-    assert stats == {"documents": 1, "added": 1, "deleted": 1, "kept": 1}
+    assert stats == {"documents": 1, "added": 1, "deleted": 1, "kept": 1, "updated": 0}
     assert embedded == ["c1"]
     row = next(r for r in sb.db["rag_chunks"] if r["content_hash"] == "1")
     assert row["document_id"] == "a" and row["embedding_model"] == "gemini-embedding-001@768"
@@ -88,9 +106,19 @@ def test_sync_embeds_only_new_chunks_and_removes_stale_documents():
 
 
 def test_sync_without_changes_calls_no_embedding():
-    sb = FakeSB(chunks=[{"content_hash": "1", "document_id": "a"}], docs=[{"id": "a"}])
+    sb = FakeSB(chunks=[_row("1")], docs=[{"id": "a"}])
     stats = load.sync(sb, [_rec("1")], SOURCES, lambda *_: (_ for _ in ()).throw(AssertionError("no call")))
-    assert stats == {"documents": 1, "added": 0, "deleted": 0, "kept": 1}
+    assert stats == {"documents": 1, "added": 0, "deleted": 0, "kept": 1, "updated": 0}
+
+
+def test_sync_updates_metadata_of_kept_chunks_without_embedding():
+    sb = FakeSB(chunks=[_row("1"), _row("2")], docs=[{"id": "a"}])
+    changed = {**_rec("1"), "category": "supplement", "page_start": 3, "page_end": 4, "conditions": ["diabetes"]}
+    stats = load.sync(sb, [changed, _rec("2")], SOURCES, lambda *_: (_ for _ in ()).throw(AssertionError("no call")))
+    row = next(r for r in sb.db["rag_chunks"] if r["content_hash"] == "1")
+    assert (row["category"], row["page_start"], row["page_end"], row["conditions"]) == ("supplement", 3, 4, ["diabetes"])
+    assert row["embedding"] == "[keep]"
+    assert stats == {"documents": 1, "added": 0, "deleted": 0, "kept": 2, "updated": 1}
 
 
 import pytest

@@ -16,6 +16,8 @@ SOURCES, RAW, SELECTED = Path("rag/sources.json"), Path("rag/raw"), Path("rag/ev
 _PAGE = 1000  # PostgREST 기본 최대 행 수
 _INSERT_BATCH = 20  # 임베딩 배치와 같게 해서, 한도에 걸려 멈춰도 넣은 만큼은 남는다
 _DELETE_BATCH = 100
+# 본문 해시에 들어가지 않는 청크 정보. 출처 설정을 고치면 임베딩은 두고 이것만 맞춘다
+_META = ("document_id", "heading_path", "page_start", "page_end", "conditions", "category")
 
 
 class IncompleteIngest(RuntimeError):
@@ -56,8 +58,17 @@ def sync(sb, records: list[dict], sources: list[dict], embed_fn: Callable) -> di
     stale_docs = sorted({d["id"] for d in _all(sb, "rag_documents", "id")} - {s["id"] for s in sources})
     _delete(sb, "rag_documents", "id", stale_docs)  # 청크는 on delete cascade
 
-    to_add, to_delete = plan_sync(records, {r["content_hash"] for r in _all(sb, "rag_chunks", "content_hash")})
+    db_rows = {r["content_hash"]: r for r in _all(sb, "rag_chunks", ",".join(("content_hash", *_META)))}
+    to_add, to_delete = plan_sync(records, set(db_rows))
     _delete(sb, "rag_chunks", "content_hash", sorted(to_delete))
+    updated = 0
+    for r in records:
+        old = db_rows.get(r["content_hash"])
+        meta = {k: r["doc_id" if k == "document_id" else k] for k in _META}
+        if old and any(old.get(k) != v for k, v in meta.items()):
+            # ponytail: 바뀐 청크마다 요청 하나. 설정 수정은 드물어 묶지 않는다
+            sb.table("rag_chunks").update(meta).eq("content_hash", r["content_hash"]).execute()
+            updated += 1
     model = f"{EMBEDDING_MODEL}@{EMBEDDING_DIMS}"
     for i in range(0, len(to_add), _INSERT_BATCH):
         batch = to_add[i : i + _INSERT_BATCH]
@@ -69,7 +80,7 @@ def sync(sb, records: list[dict], sources: list[dict], embed_fn: Callable) -> di
              "embedding": _vector_literal(v)} for r, v in zip(batch, vectors, strict=True)]).execute()
         log.info("inserted %d/%d", min(i + _INSERT_BATCH, len(to_add)), len(to_add))
     return {"documents": len(sources), "added": len(to_add), "deleted": len(to_delete),
-            "kept": len(records) - len(to_add)}
+            "kept": len(records) - len(to_add), "updated": updated}
 
 
 def _embed_with_retry(texts: list[str], kind: str, attempts: int = 4) -> list[list[float]]:
