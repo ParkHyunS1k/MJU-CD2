@@ -82,7 +82,10 @@ def _analyze_inbody_record(
     previous = _previous_risks(sb, user, records, target)
     changes = risk_change.compute(previous[1], current, previous[0]["measured_at"]) if previous else None
 
-    trend_analysis = _build_trend_analysis(records, disease_risks)
+    # 과거 기록을 분석할 때 그 뒤의 측정이 추세에 섞이지 않게 한다
+    until = target.get("measured_at")
+    trend_analysis = _build_trend_analysis(
+        [r for r in records if not until or (r.get("measured_at") or "") <= until], disease_risks)
 
     metrics = compute_personal_metrics(target, user)
     # 상한이 쿼리 수 이상이라 모든 쿼리의 1위는 순서와 관계없이 들어간다. 질환 쿼리를 앞에 둬
@@ -185,8 +188,9 @@ def _build_trend_analysis(records: list[dict], disease_risks: list[dict]) -> dic
     shap_feature_directions: dict[str, set[str]] = {}
     for risk in disease_risks:
         for factor in risk["top_factors"]:
+            # 값이 늘 때 위험이 오르는 방향. SHAP 방향(평균 대비)을 쓰면 평균보다 낮은 BMI가 더 낮아져도 악화가 된다
             shap_feature_directions.setdefault(factor["feature_kor"], set()).add(
-                factor["direction"]
+                factor["increase_direction"]
             )
 
     return compute_trends(records, shap_feature_directions)

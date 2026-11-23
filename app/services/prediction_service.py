@@ -102,6 +102,19 @@ def _contributions(bundle: dict, x: np.ndarray) -> dict[str, float]:
     return {f: float(c[idx].sum()) for f, idx in bundle["feature_groups"].items()}
 
 
+def _increase_direction(bundle: dict, x: np.ndarray, feature: str) -> str:
+    """값이 늘면 이 질환 위험이 오르는지(up) 내리는지(down). SHAP 방향(평균 대비 지금 값)과 다르다.
+    추세의 악화 판정에 쓴다. 가족력·성별은 0→1, 연속값은 0.5 늘려 비교한다."""
+    i = FEATURES.index(feature)
+    lo, hi = x.copy(), x.copy()
+    if feature == "female" or feature in FAMILY_HISTORY:
+        lo[0, i], hi[0, i] = 0.0, 1.0
+    else:
+        hi[0, i] += 0.5
+    p_lo, p_hi = bundle["model"].predict_proba(np.vstack([lo, hi]))[:, 1]
+    return "up" if p_hi > p_lo else "down"
+
+
 def _risk_level(prob: float, bundle: dict) -> str:
     if prob >= bundle["thresh_high"]:
         return "high"
@@ -129,7 +142,8 @@ def predict_all(inbody: dict, user_profile: dict) -> list[dict]:
         contributions = _contributions(bundle, x)
         factors = [
             {"feature_kor": bundle["feat_kor"][f], "value": float(x[0, FEATURES.index(f)]),
-             "shap_value": c, "direction": "up" if c > 0 else "down"}
+             "shap_value": c, "direction": "up" if c > 0 else "down",
+             "increase_direction": _increase_direction(bundle, x, f)}
             for f, c in contributions.items() if f in shown
         ]
         factors.sort(key=lambda d: abs(d["shap_value"]), reverse=True)

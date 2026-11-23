@@ -37,7 +37,7 @@ def test_output_shape(models_dir):
         assert 0 < r["probability"] < 1 and r["risk_level"] in {"low", "medium", "high"}
         assert 1 <= len(r["top_factors"]) <= 3
         for f in r["top_factors"]:
-            assert set(f) == {"feature_kor", "value", "shap_value", "direction"}
+            assert set(f) == {"feature_kor", "value", "shap_value", "direction", "increase_direction"}
             assert f["feature_kor"] != "성별"
             assert f["direction"] == ("up" if f["shap_value"] > 0 else "down")
 
@@ -205,3 +205,11 @@ def test_minor_at_measurement_raises(models_dir):
 def test_contributions_cover_all_features(models_dir):
     for r in ps.predict_all(INBODY, PROFILE):
         assert set(r["contributions"]) == set(ps.FEATURES)
+
+
+def test_increase_direction_is_slope_not_shap_sign(models_dir):
+    # 평균보다 BMI가 낮으면 SHAP 방향은 down이지만, BMI가 늘면 위험이 오르는 방향(up)은 그대로다
+    hyper = next(r for r in ps.predict_all({"bmi": 18.0, "body_fat_percentage": 15.0}, PROFILE)
+                 if r["disease_key"] == "hypertension")
+    bmi = next(f for f in hyper["top_factors"] if f["feature_kor"] == "BMI")
+    assert bmi["direction"] == "down" and bmi["increase_direction"] == "up"

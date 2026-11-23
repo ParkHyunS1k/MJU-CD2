@@ -173,6 +173,19 @@ class InBodyResponse(InBodyCreate):
     ai_report: HealthReport | None = None
 
 
+Segment = Literal["표준", "표준이하", "표준이상"]
+
+
+class SegmentalExtraction(BaseModel):
+    """결과지 부위별 분석의 판정. 응답 스키마에 자유 키 dict를 쓸 수 없어 부위를 고정한다."""
+
+    left_arm: Segment | None = Field(None, description="왼팔")
+    right_arm: Segment | None = Field(None, description="오른팔")
+    trunk: Segment | None = Field(None, description="몸통")
+    left_leg: Segment | None = Field(None, description="왼다리")
+    right_leg: Segment | None = Field(None, description="오른다리")
+
+
 class InBodyExtraction(BaseModel):
     """Gemini Vision이 이미지/PDF에서 추출하는 구조화 결과. 제약 없이 단순 타입만 사용."""
 
@@ -191,6 +204,20 @@ class InBodyExtraction(BaseModel):
     basal_metabolic_rate: float | None = Field(None, description="기초대사량(kcal)")
     abs_fat: float | None = Field(None, description="복부지방률 또는 복부비만율. 결과지에서 '복부지방률', 'WHR', '복부비만율' 등의 항목으로 표시되며 보통 0.7~1.0 사이의 소수값")
     fat_level: float | None = Field(None, description="내장지방레벨(1~20 정수)")
+    # 리포트 개인화에 쓰는 결과지 항목(InBody270 기준). 임피던스는 리포트에 쓰지 않아 추출하지 않는다
+    height: float | None = Field(None, description="신장(cm)")
+    muscle_control: float | None = Field(None, description="체중조절의 근육조절(kg). 적정이면 결과지에 0.0으로 표시")
+    fat_control: float | None = Field(None, description="체중조절의 지방조절(kg). 감량은 음수, 결과지 부호 그대로")
+    weight_control: float | None = Field(None, description="체중조절(kg). 감량은 음수, 결과지 부호 그대로")
+    target_weight: float | None = Field(None, description="적정체중(kg)")
+    inbody_score: float | None = Field(None, description="인바디점수")
+    fat_free_mass: float | None = Field(None, description="제지방량(kg)")
+    obesity_degree: float | None = Field(None, description="비만도(%)")
+    recommended_calories: float | None = Field(None, description="권장섭취열량(kcal)")
+    bmi_evaluation: str | None = Field(None, description="비만평가의 BMI 판정(표준·저체중·과체중·심한과체중)")
+    body_fat_evaluation: str | None = Field(None, description="비만평가의 체지방률 판정(표준·경도비만·비만)")
+    segmental_lean: SegmentalExtraction | None = Field(None, description="부위별 근육분석 판정")
+    segmental_fat: SegmentalExtraction | None = Field(None, description="부위별 체지방분석 판정")
 
 
 class InBodyUploadResponse(BaseModel):

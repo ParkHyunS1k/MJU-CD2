@@ -30,6 +30,10 @@ class FakeQuery:
     def limit(self, *_):
         return self
 
+    def range(self, start, end):
+        self.window = (start, end + 1)
+        return self
+
     def update(self, data):
         self.data = data
         return self
@@ -42,6 +46,8 @@ class FakeQuery:
             return SimpleNamespace(data=[{**self.filters, **self.data}])
         rows = [r for r in self.sb.rows.get(self.name, [])
                 if all(r.get(k) == v for k, v in self.filters.items())]
+        if getattr(self, "window", None):
+            rows = rows[slice(*self.window)]
         return SimpleNamespace(data=rows)
 
 
@@ -184,3 +190,13 @@ def test_trend_falls_back_to_created_at(predict):
     out = rs.trend(sb, "u1")
     assert [(p["inbody_id"], p["measured_at"]) for p in out] == [
         ("r1", RECORD["measured_at"]), ("r0", "2026-01-05T00:00:00+00:00")]
+
+
+def test_reads_every_page(predict, monkeypatch):
+    monkeypatch.setattr(rs, "_PAGE", 2)
+    records = [{**RECORD, "id": f"r{i}", "measured_at": f"2025-0{i + 1}-01T00:00:00+00:00"} for i in range(5)]
+    users = [{"id": "u1", **PROFILE}, {"id": "u2", **PROFILE}, {"id": "u3", **PROFILE}]
+    sb = FakeSB({"users": users, "inbody_logs": records})
+    assert rs.refresh_user(sb, "u1", PROFILE) == 5
+    assert len(rs.trend(sb, "u1")) == 5
+    assert rs.backfill(sb) == 5  # u2·u3은 기록이 없다. 사용자도 세 번째 페이지까지 읽는다

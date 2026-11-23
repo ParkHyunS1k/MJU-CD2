@@ -9,6 +9,18 @@ log = logging.getLogger(__name__)
 
 TABLE = "inbody_logs"
 COLUMN = "disease_risks"
+_PAGE = 1000  # PostgREST 기본 최대 반환 행 수
+
+
+def _all(make_query) -> list[dict]:
+    """한 번에 _PAGE행까지만 오므로 끝까지 넘겨 읽는다(rag/load.py의 _all과 같은 방식)."""
+    rows, start = [], 0
+    while True:
+        page = make_query().range(start, start + _PAGE - 1).execute().data
+        rows.extend(page)
+        if len(page) < _PAGE:
+            return rows
+        start += _PAGE
 
 
 def _num(value) -> float | None:
@@ -79,10 +91,10 @@ def refresh_record(sb, record: dict, profile: dict | None = None) -> None:
 
 def refresh_user(sb, user_id: str, profile: dict) -> int:
     """그 사용자의 기록 수를 돌려준다."""
-    res = sb.table(TABLE).select("*").eq("user_id", user_id).execute()
-    for record in res.data:
+    records = _all(lambda: sb.table(TABLE).select("*").eq("user_id", user_id).order("id"))
+    for record in records:
         refresh_record(sb, record, profile)
-    return len(res.data)
+    return len(records)
 
 
 def trend(sb, user_id: str) -> list[dict]:
@@ -90,7 +102,7 @@ def trend(sb, user_id: str) -> list[dict]:
     users = sb.table("users").select("*").eq("id", user_id).limit(1).execute().data
     if not users:
         return []
-    records = sb.table(TABLE).select("*").eq("user_id", user_id).order("measured_at").execute().data
+    records = _all(lambda: sb.table(TABLE).select("*").eq("user_id", user_id).order("id"))
     out = []
     # 측정일이 없으면 나이 계산(measurement_year)과 같게 등록 시각으로 둔다
     for record in sorted(records, key=lambda r: r.get("measured_at") or r.get("created_at") or ""):
@@ -104,7 +116,7 @@ def trend(sb, user_id: str) -> list[dict]:
 
 def backfill(sb) -> int:
     """모든 사용자의 기록을 다시 계산해 저장한다. 처리한 기록 수."""
-    return sum(refresh_user(sb, user["id"], user) for user in sb.table("users").select("*").execute().data)
+    return sum(refresh_user(sb, user["id"], user) for user in _all(lambda: sb.table("users").select("*").order("id")))
 
 
 if __name__ == "__main__":

@@ -27,3 +27,18 @@ def test_all_sheet_values_round_trip():
     dumped = InBodyCreate(weight=83.0, **SHEET).model_dump()
     assert {k: dumped[k] for k in SHEET} == SHEET
     assert set(SHEET) <= set(INBODY_VALUE_FIELDS)
+
+
+def test_extraction_schema_reads_new_sheet_fields():
+    from app.schemas.inbody import InBodyExtraction
+    from app.services.ai_service import _parse_json_response
+    from app.services.inbody_service import _record_data_from_extraction
+    import json
+
+    sheet = {k: v for k, v in SHEET.items() if k != "impedance"}  # 임피던스는 리포트에 쓰지 않아 추출하지 않는다
+    raw = json.dumps({"is_inbody": True, "confidence": 0.9, "weight": 83.0, "height": 180.0, "muscle_control": 0.0,
+                      **sheet})
+    extraction = _parse_json_response(raw, InBodyExtraction)
+    data = _record_data_from_extraction("u1", "u1/a.png", extraction)
+    assert data["muscle_control"] == 0.0 and data["height"] == 180.0 and data["fat_control"] == -4.4
+    assert data["segmental_fat"]["trunk"] == "표준이상" and data["body_fat_evaluation"] == "표준"

@@ -123,3 +123,20 @@ def test_first_record_has_no_risk_change(wired, monkeypatch):
     monkeypatch.setattr(svc, "retrieve", lambda queries: [EV])
     svc._analyze_inbody_record(None, USER, [TARGET], TARGET)
     assert wired["generate"]["risk_change"] is None
+
+
+def test_trend_worsening_uses_increase_direction():
+    days = ["2026-01-01", "2026-03-01", "2026-05-01"]
+    records = [{"measured_at": f"{d}T00:00:00+00:00", "bmi": b} for d, b in zip(days, (21.0, 20.0, 19.0))]
+    risks = [{"top_factors": [{"feature_kor": "BMI", "direction": "down", "increase_direction": "up"}]}]
+    bmi = next(t for t in svc._build_trend_analysis(records, risks)["feature_trends"] if t["feature_kor"] == "BMI")
+    assert bmi["direction"] == "down" and bmi["is_risk_worsening"] is False
+
+
+def test_trend_uses_records_up_to_target(wired, monkeypatch):
+    seen = []
+    monkeypatch.setattr(svc, "_build_trend_analysis", lambda records, risks: seen.extend(records))
+    monkeypatch.setattr(svc, "retrieve", lambda queries: [EV])
+    later = {"id": "r3", "measured_at": "2026-12-01T00:00:00+00:00"}
+    svc._analyze_inbody_record(None, USER, [later, TARGET, OLDER], TARGET)
+    assert [r["id"] for r in seen] == ["r2", "r1"]
