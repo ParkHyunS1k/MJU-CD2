@@ -76,3 +76,23 @@ def test_segmental_left_right_difference():
 def test_segmental_absent_or_all_standard_is_omitted():
     assert "segmental" not in compute({}, MALE)
     assert "segmental" not in compute({"segmental_lean": _seg(), "segmental_fat": _seg()}, MALE)
+
+
+def test_body_type_from_fat_and_muscle():
+    def bt(**inbody):
+        return compute(inbody, MALE).get("body_type")
+
+    assert bt(body_fat_percentage=27.0, muscle_control=0.0)["type"] == "지방 감량형"
+    assert bt(body_fat_percentage=23.0, muscle_control=1.5)["type"] == "지방→근육형"  # 경도비만
+    assert bt(body_fat_percentage=15.0, muscle_control=1.5)["type"] == "근육 보강형"
+    assert bt(body_fat_percentage=15.0, muscle_control=0.0)["type"] == "해당 없음"
+    unknown = bt(body_fat_percentage=27.0)
+    assert unknown == {"type": "근육 판정 불가", "fat_excess": True}
+    assert bt(muscle_control=1.5) is None and "body_type" not in compute({"body_fat_percentage": 27.0}, {})
+
+
+def test_body_type_fat_loss_kg_from_fat_control():
+    m = compute({"body_fat_percentage": 27.0, "muscle_control": 0.0, "fat_control": -6.2}, MALE)
+    assert m["body_type"]["fat_loss_kg"] == 6.2
+    m = compute({"body_fat_percentage": 27.0, "muscle_control": 0.0, "fat_control": 0.0}, MALE)
+    assert "fat_loss_kg" not in m["body_type"]

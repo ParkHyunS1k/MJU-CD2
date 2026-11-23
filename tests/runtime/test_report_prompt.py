@@ -168,3 +168,10 @@ def test_contributions_do_not_reach_the_prompt(monkeypatch):
               "top_factors": [], "contributions": {"fh_diabetes": -0.31}}]
     ai_service.generate_report(risks, {}, evidence=[])
     assert "contributions" not in responses.calls[0]["input"]
+
+
+def test_body_type_rules():
+    rules = ai_service._REPORT_SYSTEM_INSTRUCTION
+    assert "body_type" in rules and "지방 감량형" in rules and "지방→근육형" in rules and "근육 보강형" in rules
+    assert "세트" in rules and "근육 판정 불가" in rules and "fat_loss_kg" in rules
+    assert "모두 low" in rules

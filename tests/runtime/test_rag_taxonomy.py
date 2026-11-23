@@ -86,7 +86,7 @@ def test_trait_cap_and_supplement_always():
     trend = {"feature_trends": [{"feature_kor": "체중", "direction": "up"}]}
     qs = _traits({"bmi": 22.0, "body_fat_percentage": 27.0, "abs_fat": 0.95, "muscle_control": 2.0}, prof, risks, trend)
     assert len(qs) == 5 and qs[-1].trait == "영양제" and qs[-1].category == "supplement"
-    assert [q.trait for q in qs[:4]] == ["근육 부족", "체지방 과다", "복부비만", "전단계 위험"]
+    assert [q.trait for q in qs[:4]] == ["지방→근육형", "복부비만", "전단계 위험", "가족력"]
     assert [q.text for q in _traits({}, {"gender": "female"})] == [SUPP]
 
 
@@ -121,3 +121,26 @@ def test_trunk_fat_triggers_abdominal_and_order_after_whole_body_muscle():
     qs = _traits({"segmental_lean": _parts(right_leg="표준이하"), "segmental_fat": _parts(trunk="표준이상"),
                   "muscle_control": 1.0}, {"gender": "male"})
     assert [q.trait for q in qs[:3]] == ["근육 부족", "부위 근육 부족", "복부비만"]
+
+
+def test_body_type_queries():
+    def texts(**inbody):
+        return [(q.trait, q.text) for q in _traits(inbody, {"gender": "male"})]
+
+    assert texts(body_fat_percentage=27.0, muscle_control=0.0)[:3] == [
+        ("지방 감량형", "비만 유산소 운동 체지방 감소 권고"),
+        ("지방 감량형", "체중 감량 식사요법 에너지 섭취 감소 권고"),
+        ("지방 감량형", "유산소 운동 혈압 중성지방 감소 효과")]
+    assert texts(body_fat_percentage=27.0, muscle_control=2.0)[:3] == [
+        ("지방→근육형", "저항운동 강도 점진적 증가 권고"),
+        ("지방→근육형", "단백질 섭취 근육량 증가 권고"),
+        ("지방→근육형", "저항운동 인슐린 저항성 혈당 개선")]
+    assert texts(body_fat_percentage=15.0, muscle_control=2.0)[:2] == [
+        ("근육 보강형", "근육량 증가 저항운동 단백질 섭취"),
+        ("근육 보강형", "근육량 감소 당뇨병 대사증후군 위험")]
+    assert texts(body_fat_percentage=15.0, muscle_control=0.0) == [("영양제", SUPP)]
+
+
+def test_unknown_muscle_keeps_lean_body_fat_query_only():
+    qs = _traits({"bmi": 22.0, "body_fat_percentage": 27.0}, {"gender": "male"})
+    assert [q.trait for q in qs] == ["체지방 과다", "영양제"]

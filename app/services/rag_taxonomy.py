@@ -109,6 +109,19 @@ _TRAIT_LIMIT = 4
 SUPPLEMENT_QUERY = Query("general", "supplement", "영양제 건강기능식품 선택 주의사항", "영양제")
 
 
+# 체성분 유형별 쿼리(personal_metrics.body_type). 모두 질환 근거와 이어지는 문구로, 임계값 0.7028을 넘는 것을 확인했다
+_TYPE_QUERIES = {
+    "지방 감량형": [("obesity", "exercise", "비만 유산소 운동 체지방 감소 권고"),
+                ("obesity", "diet", "체중 감량 식사요법 에너지 섭취 감소 권고"),
+                ("dyslipidemia", "exercise", "유산소 운동 혈압 중성지방 감소 효과")],
+    "지방→근육형": [("sarcopenia", "exercise", "저항운동 강도 점진적 증가 권고"),
+                 ("sarcopenia", "diet", "단백질 섭취 근육량 증가 권고"),
+                 ("diabetes", "exercise", "저항운동 인슐린 저항성 혈당 개선")],
+    "근육 보강형": [("sarcopenia", "exercise", "근육량 증가 저항운동 단백질 섭취"),
+                ("metabolic_syndrome", "lifestyle", "근육량 감소 당뇨병 대사증후군 위험")],
+}
+
+
 def _risk_conditions(disease_risks: list[dict], levels: set[str]) -> list[str]:
     found = {RISK_CONDITIONS.get(r.get("disease_key")) for r in disease_risks if r.get("risk_level") in levels}
     return [c for c in _FAMILY if c in found]  # 고혈압, 당뇨병, 이상지질혈증 순서
@@ -124,12 +137,17 @@ def trait_queries(disease_risks: list[dict], profile: dict, metrics: dict,
     # 평가한 키워드형(근감소증 운동요법) 문구라야 임계값을 넘는다. "스쿼트 런지"처럼 구체적으로 쓰면 0.66까지 떨어졌다
     part_query = ("근감소증 운동요법 하체 근력운동 권고" if any("다리" in p for p in weak_parts)
                   else "근감소증 운동요법 상체 근력운동 권고" if weak_parts else None)
+    body_type = metrics.get("body_type")
+    kind = body_type and body_type["type"]
     groups: list[list[Query]] = [
+        [Query(c, cat, text, kind) for c, cat, text in _TYPE_QUERIES.get(kind, [])],
+        # 체지방 판정이 없어 유형을 못 정했을 때만 근육 부족 단독 쿼리
         [Query("sarcopenia", "exercise", "근육량 증가 저항운동 단백질 섭취", "근육 부족")]
-        if metrics.get("muscle_status", {}).get("status") == "표준 이하" else [],
+        if body_type is None and metrics.get("muscle_status", {}).get("status") == "표준 이하" else [],
         [Query("sarcopenia", "exercise", part_query, "부위 근육 부족")] if part_query else [],
+        # 근육을 모르면 감량 쪽 유형 쿼리 대신, 정상 BMI의 체지방 과다에만 체성분 개선 쿼리
         [Query("obesity", "exercise", "체지방률 감소 근력운동 체성분 개선", "체지방 과다")]
-        if lean and metrics.get("body_fat_status", {}).get("status") in ("경도비만", "비만") else [],
+        if lean and kind == "근육 판정 불가" and body_type["fat_excess"] else [],
         [Query("metabolic_syndrome", "lifestyle", "복부비만 내장지방 감소 운동 식사", "복부비만")]
         if metrics.get("abdominal") or "몸통" in segmental.get("체지방 표준이상", []) else [],
         [Query(c, "lifestyle", _PRE_STAGE[c], "전단계 위험") for c in _risk_conditions(disease_risks, {"medium"})],

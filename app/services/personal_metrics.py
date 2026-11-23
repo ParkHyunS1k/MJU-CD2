@@ -56,6 +56,25 @@ def _body_fat_status(pbf: float, gender: str) -> dict:
     return {"status": status, "over_standard_pp": round(max(pbf - standard, 0.0), 1)}
 
 
+# 체지방 과다 × 근육 부족 → 인바디 기준 체성분 유형. 권고 방향(유산소·식사 / 저항운동·단백질)을 가른다
+_BODY_TYPES = {(True, False): "지방 감량형", (True, True): "지방→근육형", (False, True): "근육 보강형",
+               (False, False): "해당 없음"}
+
+
+def _body_type(fat: dict | None, muscle: dict | None, fat_control: float | None) -> dict | None:
+    """체지방 판정이 없으면 None. 근육조절이 없으면 '근육 판정 불가': 결과지에서 적정은 0.0으로 찍히므로
+    값이 없다는 건 읽지 않았다는 뜻이고, 근육이 부족한지 모른 채 감량만 권하면 근육까지 줄 수 있다."""
+    if fat is None:
+        return None
+    fat_excess = fat["status"] in ("경도비만", "비만")
+    if muscle is None:
+        return {"type": "근육 판정 불가", "fat_excess": fat_excess}
+    out = {"type": _BODY_TYPES[(fat_excess, muscle["status"] == "표준 이하")]}
+    if fat_control is not None and fat_control < 0:  # 결과지 지방조절은 음수가 감량
+        out["fat_loss_kg"] = -fat_control
+    return out
+
+
 def compute(inbody: dict, profile: dict) -> dict:
     """값이 없어 계산할 수 없는 지표는 키를 뺀다. missing_metrics만 항상 있다."""
     out: dict = {}
@@ -85,6 +104,10 @@ def compute(inbody: dict, profile: dict) -> dict:
     if muscle is not None:
         out["muscle_status"] = ({"status": "표준 이하", "increase_kg": muscle} if muscle > 0
                                 else {"status": "표준", "increase_kg": 0.0})
+
+    body_type = _body_type(out.get("body_fat_status"), out.get("muscle_status"), _num(inbody.get("fat_control")))
+    if body_type:
+        out["body_type"] = body_type
 
     abdominal = []
     abs_fat, fat_level = _num(inbody.get("abs_fat")), _num(inbody.get("fat_level"))
