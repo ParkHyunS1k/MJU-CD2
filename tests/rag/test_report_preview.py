@@ -50,3 +50,10 @@ def test_case_risk_change_uses_previous_record():
     change = case_risk_change(case, predict_all(case["inbody"], case["profile"]))
     assert len(change) == 4 and all(c["change_pp"] < 0 for c in change)  # 지난번보다 BMI·체지방률이 낮아짐
     assert case_risk_change({**case, "previous": None}, []) is None
+
+
+def test_with_muscle_alternates_adequate_and_low():
+    from rag.eval.report_preview import with_muscle
+    cases = [{"case": str(i), "inbody": {"bmi": 25.0}} for i in range(3)]
+    assert [c["inbody"]["muscle_control"] for c in with_muscle(cases)] == [0.0, 2.0, 0.0]
+    assert "muscle_control" not in cases[0]["inbody"]

@@ -6,6 +6,7 @@ KNHANES 사례(+ 선택한 인바디 기록)의 리포트를 만들고, 바꾸�
 
 설계: docs/superpowers/specs/2026-10-28-report-personalization-design.md 5.5절. 결과물은 git 제외(개인 원자료 포함).
 --inbody-json: [{"case": 이름, "profile": {gender, birth_year, fh_*}, "inbody": {...}}, ...]
+--with-muscle: KNHANES에는 근육조절이 없어, 사례마다 합성 근육조절(0.0 적정, 2.0 부족 번갈아)을 넣어 체성분 유형을 만든다.
 --with-previous: 사례마다 1년 전 합성 기록(좋아짐·나빠짐·비슷함 순환)을 붙여 위험도 변화(risk_change)까지 넣는다.
 """
 
@@ -154,6 +155,10 @@ def _synthetic_cases() -> list[dict]:
     return [{"case": name, **next(r for r in rows if cond(r))} for name, cond in rules]
 
 
+def with_muscle(cases: list[dict]) -> list[dict]:
+    return [{**c, "inbody": {**c["inbody"], "muscle_control": (0.0, 2.0)[i % 2]}} for i, c in enumerate(cases)]
+
+
 def with_previous(cases: list[dict]) -> list[dict]:
     out = []
     for i, case in enumerate(cases):
@@ -204,12 +209,15 @@ def _report(case: dict) -> dict:
             "risk_change": changes, "queries": [q.text for q in queries], "trait_hits": trait_hits, "report": content, "sources": sources}
 
 
-def run(out: Path, inbody_json: Path | None, synthetic: bool = False, previous: bool = False) -> None:
+def run(out: Path, inbody_json: Path | None, synthetic: bool = False, previous: bool = False,
+        muscle: bool = False) -> None:
     from dotenv import load_dotenv
 
     load_dotenv(".env")
     cases = (_synthetic_cases() if synthetic else _cases()) + (
         json.loads(inbody_json.read_text(encoding="utf-8")) if inbody_json else [])
+    if muscle:
+        cases = with_muscle(cases)
     if previous:
         cases = with_previous(cases)
     results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else []  # 중간에 끊겨도 이어서 한다
@@ -281,12 +289,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--inbody-json", type=Path)
     r.add_argument("--synthetic", action="store_true", help="KNHANES에 합성 부위 판정을 붙인 5명")
     r.add_argument("--with-previous", action="store_true", help="1년 전 합성 기록을 붙여 위험도 변화까지")
+    r.add_argument("--with-muscle", action="store_true", help="합성 근육조절로 체성분 유형까지")
     c = sub.add_parser("compare")
     c.add_argument("before", type=Path)
     c.add_argument("after", type=Path)
     args = parser.parse_args(argv)
     if args.action == "run":
-        run(args.out, args.inbody_json, args.synthetic, args.with_previous)
+        run(args.out, args.inbody_json, args.synthetic, args.with_previous, args.with_muscle)
         return 0
     before, after = (json.loads(p.read_text(encoding="utf-8")) for p in (args.before, args.after))
     n = min(len(before), len(after))  # 바꾸기 전 결과는 KNHANES 5명뿐이다
