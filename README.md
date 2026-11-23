@@ -1,7 +1,6 @@
 # Healthcare API (FastAPI)
 
 인바디 기록·질병 위험 예측·AI 분석을 제공하는 FastAPI 백엔드입니다.
-모바일 앱은 `mobile/` 폴더에 있습니다 ([mobile/README.md](mobile/README.md)).
 DB·인증·파일 저장은 Supabase, 서버 실행은 Railway를 사용합니다.
 
 ## 배포 서버
@@ -19,7 +18,6 @@ DB·인증·파일 저장은 Supabase, 서버 실행은 Railway를 사용합니�
 | `SUPABASE_URL` | 공개 | Supabase 대시보드 → Project Settings → API |
 | `SUPABASE_ANON_KEY` | 공개 | 〃 |
 | `SUPABASE_SERVICE_ROLE_KEY` | **위험** (RLS 우회) | 〃 — 채팅으로 주고받지 말 것 |
-| `SUPABASE_JWT_SECRET` | 비밀 | Supabase 대시보드 → Project Settings → API (main 브랜치 코드에서 필수) |
 | `GEMINI_API_KEY` | 비밀 | [Google AI Studio](https://aistudio.google.com/apikey)에서 각자 발급 |
 | `ALLOWED_ORIGINS` | 공개 | 기본값 `*` |
 

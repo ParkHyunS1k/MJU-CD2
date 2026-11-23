@@ -8,7 +8,30 @@ venv/
 .vscode/
 .idea/
 .DS_Store
-
-# 로컬 도구 설정
+.pytest_cache/
+node_modules
 .omc/
 .omx/
+발표/
+# 개인 인바디 결과지(회원번호에 개인정보)
+인바디/
+
+# 학습 데이터(국민건강영양조사 원시자료)와 실험 산출물
+training/data/
+training/output/
+
+# RAG 원본 문서(재배포 불가)와 수집 산출물
+rag/raw/
+rag/data/
+
+# RAG 평가: 지침 원문이 들어가는 중간 산출물과 캐시
+rag/eval/cache/
+rag/eval/data/review_items.json
+rag/eval/data/review_decisions.json
+rag/eval/data/augment_*.json
+
+# 국가건강정보포털 API URL(토큰 포함)
+rag/kdca_urls.json
+
+# 리포트 미리보기 결과(KNHANES·개인 인바디 포함)
+rag/eval/preview/

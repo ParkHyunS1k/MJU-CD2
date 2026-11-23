@@ -1,0 +1,14 @@
+{
+  "parser": "pymupdf",
+  "spacing": false,
+  "chunker": "paragraph-single",
+  "max_chars": 1200,
+  "overlap": 0,
+  "embedding_model": "bge-m3",
+  "dimensions": 1024,
+  "hybrid": false,
+  "reranker": null,
+  "query_form": "keyword",
+  "final_k": 13,
+  "threshold": 0.6125
+}

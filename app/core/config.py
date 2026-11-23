@@ -9,15 +9,23 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_ANON_KEY: str
     SUPABASE_SERVICE_ROLE_KEY: str
-    SUPABASE_JWT_SECRET: str
 
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: str  # 사진 수치 추출, 검색 임베딩
+    OPENAI_API_KEY: str  # 리포트 생성
 
     ALLOWED_ORIGINS: str = "*"
 
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]
+
+    @property
+    def cors_allow_credentials(self) -> bool:
+        return "*" not in self.cors_origins
+
+    @property
+    def supabase_jwt_issuer(self) -> str:
+        return f"{self.SUPABASE_URL.rstrip('/')}/auth/v1"
 
 
 @lru_cache
