@@ -41,17 +41,31 @@ def _text(value) -> str | None:
     return value or None
 
 
-def _range(low, high) -> str | None:
+def _digits(value: str) -> str:
+    return re.sub(r"[^\d.]", "", value)
+
+
+def _zero(value: str) -> bool:  # "0", "0 (mg)", 숫자 없음
+    return re.fullmatch(r"0*(\.0+)?", _digits(value)) is not None
+
+
+def _range(low, high, unit=None) -> str | None:
+    """하한 0과 '상한 없음'을 뜻하는 99999… 같은 값은 숫자로 보여 주지 않는다(예: 5–999999999 g → 5 g 이상)."""
     low, high = _text(low), _text(high)
-    if not (low or high):
-        return None
-    return low or high if low == high or not (low and high) else f"{low}–{high}"
+    if low and _zero(low):
+        low = None
+    if high and (_zero(high) or re.fullmatch(r"9{5,}", _digits(high))):
+        high = None
+    with_unit = (lambda v: f"{v} {unit}") if unit else (lambda v: v)
+    if low and high:
+        return with_unit(low) if low == high else with_unit(f"{low}–{high}")
+    if low:
+        return f"{with_unit(low)} 이상"
+    return f"{with_unit(high)} 이하" if high else None
 
 
 def _from_i2710(row: dict) -> dict:
-    intake = _range(row.get("DAY_INTK_LOWLIMIT"), row.get("DAY_INTK_HIGHLIMIT"))
-    if intake and _text(row.get("INTK_UNIT")):
-        intake += f" {row['INTK_UNIT'].strip()}"
+    intake = _range(row.get("DAY_INTK_LOWLIMIT"), row.get("DAY_INTK_HIGHLIMIT"), _text(row.get("INTK_UNIT")))
     # INTK_MEMO는 대부분 "(24.12.23.) 일일섭취량 현행화" 같은 변경 이력이라 쓰지 않는다
     no = recognition_no(row["PRDCT_NM"])
     return {"name": clean_name(row["PRDCT_NM"]), "notified": no is None, "recognition_no": no,

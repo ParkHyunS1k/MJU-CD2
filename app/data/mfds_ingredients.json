@@ -28,7 +28,7 @@
   "notified": true,
   "recognition_no": null,
   "function": "(1) 혈중 콜레스테롤 개선･배변활동 원활에 도움을 줄 수 있음",
-  "intake": "5–999999999 g",
+  "intake": "5 g 이상",
   "cautions": "(1) 반드시 충분한 물과 함께 섭취할 것(액상제외)\n(2) 이상사례 발생 시 섭취를 중단하고 전문가와 상담할 것",
   "tags": [
    "cholesterol"
@@ -125,7 +125,7 @@
   "notified": false,
   "recognition_no": "2014-6",
   "function": "이 제품은 중쇄지방산을 함유하고 있어 다른 식용유와 비교하였을 때 체지방 증가가 적을 수 있음 (생리활성기능 2등급)",
-  "intake": "0 mg/g",
+  "intake": null,
   "cautions": null,
   "tags": [
    "body_fat"
@@ -419,7 +419,7 @@
   "notified": false,
   "recognition_no": "2009-20",
   "function": "이 제품은 중쇄지방산을 함유하고 있어 다른 식용유와 비교하였을 때 체지방 증가가 적을 수 있음(기타기능II)",
-  "intake": "0 mg/g",
+  "intake": null,
   "cautions": null,
   "tags": [
    "body_fat"
@@ -431,7 +431,7 @@
   "notified": false,
   "recognition_no": "2009-21",
   "function": "이 제품은 디글리세라이드(Diacylglyceride)를 함유하고 있어 다른 식용유와 비교했을 때 식후 혈중 중성지방과 체지방 증가가 적을 수 있음(기타기능 II)",
-  "intake": "0–99999 mg",
+  "intake": null,
   "cautions": null,
   "tags": [
    "triglyceride",
@@ -1467,7 +1467,7 @@
   "notified": true,
   "recognition_no": null,
   "function": "(1) 혈중 콜레스테롤 개선·식후 혈당상승 억제에 도움을 줄 수 있음",
-  "intake": "4.5–999999999 g",
+  "intake": "4.5 g 이상",
   "cautions": "(가) 반드시 충분한 물과 함께 섭취할 것(액상제외)\n(나) 이상사례 발생 시 섭취를 중단하고 전문가와 상담할 것",
   "tags": [
    "blood_glucose",
@@ -2097,7 +2097,7 @@
   "notified": false,
   "recognition_no": "2007-4",
   "function": "(국문) 콜레스테롤 감소에 도움을 줄 수 있음(기타기능II) (영문) May help to reduce blood triglyceride levels after meals",
-  "intake": "0 (mg)–50,000 (mg)",
+  "intake": "50,000 (mg) 이하",
   "cautions": "①혈액응고와 관련된 질병이 있거나 혈액응고저해제를 섭취하는 경우는 반드시 의사나 약사와 상담 후에 섭취하여야 합니다.②아마인의 섭취는 다른 약물의 흡수를 방해할 수 있으므로 약제를 섭취하는 경우에는 의사나 약사와 상담 후 섭취하여야 합니다.",
   "tags": [
    "cholesterol"

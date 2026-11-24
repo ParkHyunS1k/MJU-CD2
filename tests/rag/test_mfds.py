@@ -58,3 +58,21 @@ def test_intake_memo_is_not_shown():
     # 메모는 대부분 "(24.12.23.) 일일섭취량 현행화" 같은 변경 이력이라 섭취량 문장에 넣지 않는다
     row = {**_a("공액리놀레산", "체지방 감소에 도움을 줄 수 있음"), "INTK_MEMO": "(24.12.23.) 일일섭취량 현행화"}
     assert mfds.build_ingredients([row], [])[0]["intake"] == "1.4–4.2 g"
+
+
+@pytest.mark.parametrize("low,high,unit,expected", [
+    ("5", "999999999", "g", "5 g 이상"),          # 상한 없음을 큰 수로 적은 경우
+    ("0", "99999", "mg", None),                  # 하한 0 + 상한 없음 = 정보 없음
+    ("0", "0", "mg/g", None),
+    ("0", "50", "g", "50 g 이하"),
+])
+def test_placeholder_limits_are_not_shown_as_numbers(low, high, unit, expected):
+    row = {**_a("차전자피식이섬유", "혈중 콜레스테롤 개선에 도움"), "DAY_INTK_LOWLIMIT": low,
+           "DAY_INTK_HIGHLIMIT": high, "INTK_UNIT": unit}
+    assert mfds.build_ingredients([row], [])[0]["intake"] == expected
+
+
+def test_i0050_placeholder_limits():
+    row = {**_b("아마인(기능성원료인정제2007-4호)", "제2007-4호", "혈중 콜레스테롤 개선에 도움"),
+           "DAY_INTK_LOWLIMIT": "0 (mg)", "DAY_INTK_HIGHLIMIT": "50,000 (mg)"}
+    assert mfds.build_ingredients([], [row])[0]["intake"] == "50,000 (mg) 이하"
