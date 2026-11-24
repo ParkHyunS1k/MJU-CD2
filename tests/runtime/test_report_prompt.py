@@ -180,3 +180,9 @@ def test_body_type_rules():
 def test_guide_has_mfds_supplement_rules():
     guide = ai_service._REPORT_GUIDE
     assert "식품의약품안전처" in guide and "섭취 시 주의사항" in guide and "원료명 그대로" in guide
+
+
+def test_guide_keeps_muscle_supplement_even_when_risks_are_low():
+    # 위험이 모두 낮으면 GPT가 영양제를 비우는데, 근육 부족은 질환 위험과 따로 관리할 대상이다
+    guide = ai_service._REPORT_GUIDE
+    assert "muscle_status" in guide and "모두 low여도" in guide and "근력 기능성 원료" in guide
