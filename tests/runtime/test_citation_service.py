@@ -33,7 +33,7 @@ def test_unknown_duplicate_and_messy_ids_are_cleaned():
 
 
 def test_supplement_without_valid_citation_is_dropped():
-    s2 = Evidence(**{**_ev("S2").__dict__, "chunk_category": "supplement"})
+    s2 = Evidence(**{**_ev("S2").__dict__, "chunk_category": "supplement", "document_id": "mfds"})
     content, _ = validate_citations(_content(), [_ev("S1"), s2])
     assert [s["name"] for s in content["supplement_candidates"]] == ["홍국"]
 
@@ -76,7 +76,8 @@ def test_old_report_without_new_fields_still_parses():
 def test_supplement_citing_only_diet_or_lifestyle_evidence_is_dropped():
     # 식사요법 문단이 생선·마그네슘 식품을 말해도 영양제 근거는 아니다
     diet = Evidence(**{**_ev("S1").__dict__, "chunk_category": "diet"})
-    supplement = Evidence(**{**diet.__dict__, "sid": "S2", "chunk_id": 2, "chunk_category": "supplement"})
+    supplement = Evidence(**{**diet.__dict__, "sid": "S2", "chunk_id": 2, "chunk_category": "supplement",
+                             "document_id": "mfds"})
     content = _content(supplement_candidates=[
         {"name": "오메가3", "purpose": "p", "related_metrics": [], "evidence_level": "limited", "why_consider": "w",
          "cautions": [], "not_recommended_if": [], "source_ids": ["S1"]},
@@ -85,3 +86,15 @@ def test_supplement_citing_only_diet_or_lifestyle_evidence_is_dropped():
     out, sources = validate_citations(content, [diet, supplement])
     assert [s["name"] for s in out["supplement_candidates"]] == ["홍국"]
     assert out["supplement_candidates"][0]["source_ids"] == ["S2"]
+
+
+def test_supplement_needs_an_mfds_citation_portal_kept_alongside():
+    # 포털 영양제 문서는 일반 안내라 원료 근거가 아니다. 식약처 원료를 함께 인용하면 주의사항 근거로 남긴다
+    portal = Evidence(**{**_ev("S7").__dict__, "chunk_category": "supplement"})
+    mfds = Evidence(**{**_ev("S8").__dict__, "chunk_category": "supplement", "document_id": "mfds"})
+    c = _content()
+    c["supplement_candidates"][0]["source_ids"] = ["S7"]
+    c["supplement_candidates"][1]["source_ids"] = ["S7", "S8"]
+    out, _ = validate_citations(c, [portal, mfds])
+    assert [s["name"] for s in out["supplement_candidates"]] == ["홍국"]
+    assert out["supplement_candidates"][0]["source_ids"] == ["S7", "S8"]

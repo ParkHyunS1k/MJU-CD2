@@ -175,3 +175,8 @@ def test_body_type_rules():
     assert "body_type" in rules and "지방 감량형" in rules and "지방→근육형" in rules and "근육 보강형" in rules
     assert "세트" in rules and "근육 판정 불가" in rules and "fat_loss_kg" in rules
     assert "모두 low" in rules
+
+
+def test_guide_has_mfds_supplement_rules():
+    guide = ai_service._REPORT_GUIDE
+    assert "식품의약품안전처" in guide and "섭취 시 주의사항" in guide and "원료명 그대로" in guide
