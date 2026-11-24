@@ -191,6 +191,7 @@ def _report(case: dict) -> dict:
     from app.services.prediction_service import predict_all
     from app.services.rag_taxonomy import build_queries, trait_queries
     from app.services.retrieval_service import retrieve
+    from app.services.supplement_evidence import supplement_evidence
 
     prof, inbody = case["profile"], case["inbody"]
     risks = predict_all(inbody, prof)
@@ -198,6 +199,7 @@ def _report(case: dict) -> dict:
     traits = trait_queries(risks, prof, metrics, None)
     queries = [*build_queries(risks, inbody, prof["gender"]), *traits]
     evidence = retrieve(queries)
+    evidence = [*evidence, *supplement_evidence(risks, metrics, start=len(evidence) + 1)]
     changes = case_risk_change(case, risks)
     raw = generate_report(risks, prof, inbody_metrics=inbody, evidence=evidence, personal_metrics=metrics,
                           risk_change=changes)

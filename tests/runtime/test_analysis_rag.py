@@ -30,6 +30,8 @@ def wired(monkeypatch):
     monkeypatch.setattr(svc, "_save_report_and_cleanup_image", lambda sb, t, r: calls.__setitem__("saved", r))
     monkeypatch.setattr(svc.risk_store, "save", lambda sb, record_id, value: None)
     monkeypatch.setattr(svc.risk_store, "ensure", lambda sb, record, profile: None)
+    # 기존 테스트가 실제 원료 파일에 기대지 않게 한다. 영양제 근거 테스트는 이것을 다시 덮어쓴다
+    monkeypatch.setattr(svc, "supplement_evidence", lambda risks, metrics, start: [])
 
     def fake_generate(**kw):
         calls["generate"] = kw
@@ -140,3 +142,20 @@ def test_trend_uses_records_up_to_target(wired, monkeypatch):
     later = {"id": "r3", "measured_at": "2026-12-01T00:00:00+00:00"}
     svc._analyze_inbody_record(None, USER, [later, TARGET, OLDER], TARGET)
     assert [r["id"] for r in seen] == ["r2", "r1"]
+
+
+def test_supplement_evidence_follows_retrieved_evidence(wired, monkeypatch):
+    monkeypatch.setattr(svc, "retrieve", lambda queries: [EV])
+    sup = Evidence(sid="S2", chunk_id=-1, document_id="mfds", title="바나바잎 추출물", publisher="식품의약품안전처",
+                   year=2026, url=None, heading_path="고시형", page_start=None, page_end=None, content="x\ny",
+                   similarity=1.0, condition="general", category="supplement", chunk_category="supplement")
+    seen = {}
+
+    def fake(risks, metrics, start):
+        seen["start"] = start
+        return [sup]
+
+    monkeypatch.setattr(svc, "supplement_evidence", fake)
+    svc._analyze_inbody_record(None, USER, [TARGET], TARGET)
+    assert seen["start"] == 2
+    assert [e.sid for e in wired["generate"]["evidence"]] == ["S1", "S2"]

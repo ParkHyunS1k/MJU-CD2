@@ -10,6 +10,7 @@ from app.services.prediction_service import predict_all
 from app.services.rag_taxonomy import build_queries, trait_queries
 from app.services.retrieval_service import RetrievalError, retrieve
 from app.services.storage_service import delete_inbody_file
+from app.services.supplement_evidence import supplement_evidence
 from app.services.trend_service import compute_trends, is_eligible
 
 log = logging.getLogger(__name__)
@@ -99,6 +100,8 @@ def _analyze_inbody_record(
         raise AnalysisServiceError(503, "참고 자료를 불러오지 못했습니다. 잠시 후 다시 분석해주세요.") from e
     if not evidence:
         log.warning("RAG 근거 0개: %s", [q.text for q in queries])
+    # 영양제 근거(식약처 기능성 원료)는 검색 근거 뒤에 따로 붙인다. 검색 근거 자리를 밀어내지 않는다
+    evidence = [*evidence, *supplement_evidence(disease_risks, metrics, start=len(evidence) + 1)]
 
     try:
         gemini_result = generate_report(
